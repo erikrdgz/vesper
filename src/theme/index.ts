@@ -332,3 +332,12 @@ export const theme = {
 
 export type Theme = typeof theme;
 export default theme;
+
+/**
+ * Whether `Animated` may use the native driver.
+ *
+ * react-native-web has no native animated module, and asking for one logs
+ * a warning on every animation. Opacity and transform are compositor
+ * properties in a browser anyway, so the JS driver costs nothing here.
+ */
+export const nativeDriver = Platform.OS !== "web";

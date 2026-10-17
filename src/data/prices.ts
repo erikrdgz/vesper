@@ -13,9 +13,10 @@
  * and the caller falls back to cache and then to seed.
  */
 
-import type { QuoteMap } from "../types";
+import type { ChartRange, QuoteMap, SeriesPoint } from "../types";
 
 const ENDPOINT = "https://api.coingecko.com/api/v3/simple/price";
+const CHART_ENDPOINT = "https://api.coingecko.com/api/v3/coins";
 
 /** Give up on a request after this long. */
 const TIMEOUT_MS = 8000;
@@ -98,6 +99,104 @@ export async function fetchQuotes(ids: string[], signal?: AbortSignal): Promise<
     if (error instanceof PriceError) throw error;
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new PriceError("Price request timed out");
+    }
+    throw new PriceError("Could not reach CoinGecko");
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onOuterAbort);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Market history                                                      */
+/* ------------------------------------------------------------------ */
+
+/** How many days of history each range asks CoinGecko for. */
+const RANGE_DAYS: Record<ChartRange, number> = {
+  "1H": 1,
+  "1D": 1,
+  "1W": 7,
+  "1M": 30,
+  "1Y": 365,
+};
+
+/**
+ * How much of the returned series each range keeps.
+ *
+ * CoinGecko's granularity is fixed by `days`: under 1 day it returns
+ * roughly five-minute points, 1–90 days hourly, beyond that daily. There is
+ * no way to ask for "the last hour" directly, so 1H and 1D both fetch a day
+ * and 1H trims the tail.
+ */
+const RANGE_WINDOW_MS: Record<ChartRange, number> = {
+  "1H": 60 * 60 * 1000,
+  "1D": 24 * 60 * 60 * 1000,
+  "1W": 7 * 24 * 60 * 60 * 1000,
+  "1M": 30 * 24 * 60 * 60 * 1000,
+  "1Y": 365 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * Daily price history for one coin.
+ *
+ * Separate from `fetchQuotes` because it is far more expensive and far less
+ * urgent: a balance has to be right now, a chart can be an hour old. The
+ * caller caches on that basis.
+ */
+export async function fetchMarketChart(
+  coingeckoId: string,
+  range: ChartRange,
+  signal?: AbortSignal,
+): Promise<SeriesPoint[]> {
+  const days = RANGE_DAYS[range];
+  const url =
+    `${CHART_ENDPOINT}/${encodeURIComponent(coingeckoId)}/market_chart` +
+    `?vs_currency=usd&days=${days}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const onOuterAbort = () => controller.abort();
+  signal?.addEventListener("abort", onOuterAbort);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { accept: "application/json" },
+    });
+
+    if (response.status === 429) throw new PriceError("CoinGecko rate limit reached", true);
+    if (!response.ok) throw new PriceError(`CoinGecko responded ${response.status}`);
+
+    const payload = (await response.json()) as { prices?: [number, number][] };
+    if (!Array.isArray(payload.prices) || payload.prices.length === 0) {
+      throw new PriceError("CoinGecko returned no history");
+    }
+
+    const cutoff = Date.now() - RANGE_WINDOW_MS[range];
+    const points = payload.prices
+      .filter(
+        (pair): pair is [number, number] =>
+          Array.isArray(pair) &&
+          typeof pair[0] === "number" &&
+          typeof pair[1] === "number" &&
+          Number.isFinite(pair[1]),
+      )
+      .map(([t, v]) => ({ t, v }))
+      .filter((point) => point.t >= cutoff);
+
+    // A trim that leaves too little to draw is worse than a slightly wider
+    // window, so fall back to the untrimmed series.
+    if (points.length < 2) {
+      return payload.prices
+        .filter((pair) => Array.isArray(pair) && Number.isFinite(pair[1]))
+        .map(([t, v]) => ({ t, v }));
+    }
+
+    return points;
+  } catch (error) {
+    if (error instanceof PriceError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new PriceError("History request timed out");
     }
     throw new PriceError("Could not reach CoinGecko");
   } finally {
