@@ -200,7 +200,7 @@ export function WalletScreen() {
 
           <Pane title="Watchlist">
             <Txt variant="caption" tone="textSecondary">
-              What appears in the bar across the top. Following a token costs nothing extra —
+              What appears in the rail along the bottom. Following a token costs nothing extra —
               every price on screen comes from one request.
             </Txt>
             <View style={styles.chips}>

@@ -701,7 +701,7 @@ export function PositionSheet() {
       },
       {
         title: following ? "Stop following" : "Follow in the bar",
-        detail: following ? "Remove it from the watch bar" : "Pin it to the top of every screen",
+        detail: following ? "Remove it from the watch rail" : "Pin it to the rail on every screen",
         onPress: () => {
           toggleWatch(defi.coingeckoId);
           toast(following ? `Unfollowed ${defi.label}` : `Following ${defi.label}`);

@@ -426,12 +426,17 @@ function WatchCard({
 }
 
 /**
- * The watch bar.
+ * The watch rail.
  *
  * This replaced a scrolling ticker. A ticker moves, which looks alive,
  * but you cannot read a specific row without waiting for it to come
  * round, and you certainly cannot click one. A fixed row of cards is
  * worse television and a better instrument.
+ *
+ * It sits at the foot of the window on both breakpoints. It was at the
+ * top, where it was the first thing anyone saw on every screen — six
+ * prices ahead of the greeting, the balance and anything the person
+ * actually came for. Followed prices are a glance, not an opening.
  */
 export function Watchlist() {
   const { assets, prices, watchlist } = useVesper();
@@ -638,6 +643,10 @@ const styles = StyleSheet.create({
 
   watchBar: {
     backgroundColor: color.ground,
+    // At the foot of the window the rail needs a line above it, or the
+    // cards read as one more row of the content they are sitting under.
+    borderTopWidth: 1,
+    borderTopColor: color.hairline,
   },
   watchRun: {
     flexDirection: "row",

@@ -2,7 +2,7 @@
  * Watch.
  *
  * The catalogue, searchable, with a follow toggle per row. Following a
- * token puts it in the bar across the top of every screen, which is the
+ * token puts it in the rail along the foot of every screen, which is the
  * only reason this tab exists — a watchlist you cannot edit from one
  * place ends up edited from four.
  *

@@ -59,7 +59,7 @@ const SORTS: { id: SortId; label: string }[] = [
 
 export function OverviewScreen() {
   const netWorth = useNetWorth();
-  const { transactions, profile, alerts, snapshots, lastSeenAt } = useVesper();
+  const { transactions, alerts, snapshots, lastSeenAt } = useVesper();
   const { setTab, openSheet } = useNavigation();
   const { isDesktop } = useResponsive();
   const series = usePortfolioSeries(RANGE);
@@ -104,25 +104,7 @@ export function OverviewScreen() {
   if (empty) {
     return (
       <Screen>
-        <Pane>
-          <View style={styles.heroTop}>
-            <View style={{ flex: 1 }}>
-              <Txt variant="display" tone="textMuted">
-                {greeting()},
-              </Txt>
-              <Txt variant="display" heading>
-                {firstName(profile.name)}
-              </Txt>
-            </View>
-            <Tap
-              onPress={() => setTab("wallet")}
-              accessibilityRole="button"
-              accessibilityLabel="Open your wallet"
-            >
-              <Avatar name={profile.name} size={52} />
-            </Tap>
-          </View>
-        </Pane>
+        <Opening />
 
         <Pane flex={1} minHeight={isDesktop ? undefined : 360}>
           <View style={styles.emptyState}>
@@ -155,36 +137,11 @@ export function OverviewScreen() {
 
   return (
     <Screen>
-      {/* The opening.
-          
-          This used to be a two-line label wedged between the watch bar
-          and the balance, which is not a welcome, it is a caption. It is
-          display type with room around it now, and underneath it the app
-          says what happened in a sentence — the thing that was missing
-          was never layout, it was that Vesper never told you anything. */}
-      <Pane>
-        <View style={styles.heroTop}>
-          <View style={{ flex: 1 }}>
-            <Txt variant="display" tone="textMuted">
-              {greeting()},
-            </Txt>
-            <Txt variant="display" heading>
-              {firstName(profile.name)}
-            </Txt>
-          </View>
-          <Tap
-            onPress={() => setTab("wallet")}
-            accessibilityRole="button"
-            accessibilityLabel="Open your wallet"
-          >
-            <Avatar name={profile.name} size={52} />
-          </Tap>
-        </View>
-
-        <View style={styles.heroSay}>
+      <Opening>
+        <View style={styles.say}>
           <View
             style={[
-              styles.heroTick,
+              styles.sayTick,
               {
                 backgroundColor:
                   say.tone === "up"
@@ -210,7 +167,7 @@ export function OverviewScreen() {
             ) : null}
           </View>
         </View>
-      </Pane>
+      </Opening>
 
       <Row flex={1}>
         <Column flex={2.2}>
@@ -376,6 +333,51 @@ export function OverviewScreen() {
 }
 
 /* ------------------------------------------------------------------ */
+
+/**
+ * The opening.
+ *
+ * Deliberately not a pane. The first thing on the screen should read as
+ * someone speaking to you, and a greeting inside a bento block reads as a
+ * caption on the block — which is what it was, two lines of grey label
+ * boxed between the watch bar and the balance. It is on the ground now,
+ * at the top of the column, a size up from the balance below it and in
+ * plain white, with the narration tucked under it as `children`.
+ */
+function Opening({ children }: { children?: React.ReactNode }) {
+  const { profile } = useVesper();
+  const { setTab } = useNavigation();
+  const { isDesktop } = useResponsive();
+
+  return (
+    <View style={styles.opening}>
+      {/* Two lines, not one. "Good afternoon, Alexandra" at this size
+          wraps on a phone wherever it likes; broken by hand it always
+          breaks after the comma. The avatar rides the name line for the
+          same reason — sharing the first line would squeeze the longest
+          greeting into two of its own. */}
+      <Txt variant="greeting">{greeting()},</Txt>
+      <View style={styles.openingName}>
+        <Txt variant="greeting" heading>
+          {firstName(profile.name)}
+        </Txt>
+        {/* Mobile only. The desktop command bar already carries the
+            avatar, and two of them stacked up the right-hand edge is one
+            portrait of you too many. */}
+        {!isDesktop && (
+          <Tap
+            onPress={() => setTab("wallet")}
+            accessibilityRole="button"
+            accessibilityLabel="Open your wallet"
+          >
+            <Avatar name={profile.name} size={48} />
+          </Tap>
+        )}
+      </View>
+      {children}
+    </View>
+  );
+}
 
 /**
  * The chart, sized to whatever the pane left over.
@@ -666,17 +668,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: space.xs,
   },
-  heroTop: {
+  opening: {
+    // Matches a pane's own body padding, so the greeting starts on the
+    // same line as every pane title under it even though it is not in
+    // one.
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+    paddingBottom: space.sm,
+  },
+  openingName: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: space.md,
   },
-  heroSay: {
+  say: {
     flexDirection: "row",
     gap: space.sm,
-    marginTop: space.md,
+    marginTop: space.lg,
   },
-  heroTick: {
+  sayTick: {
     width: 3,
     borderRadius: 2,
     alignSelf: "stretch",

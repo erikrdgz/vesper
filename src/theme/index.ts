@@ -186,11 +186,27 @@ export const fontFamily = Platform.select({
 /**
  * The type matrix.
  *
- * Balances are the only thing allowed above 24pt, and they are tracked
- * tight because long numbers at display size fall apart otherwise. Captions
- * and micro labels are tracked loose for the opposite reason.
+ * Balances and the greeting are the only things allowed above 24pt, and
+ * they are tracked tight because long strings at display size fall apart
+ * otherwise. Captions and micro labels are tracked loose for the opposite
+ * reason.
  */
 export const type = {
+  /**
+   * The opening greeting, and the only non-numeric type at this size.
+   *
+   * It is a size up from `display` and a weight down from it: the line is
+   * the first thing on the screen and wants height rather than mass, and
+   * at 700 two lines of it read as a headline about the person rather
+   * than a greeting to them.
+   */
+  greeting: {
+    fontFamily,
+    fontSize: 40,
+    lineHeight: 46,
+    fontWeight: "600",
+    letterSpacing: -1.2,
+  },
   /** The one hero balance per screen. */
   displayXl: {
     fontFamily,

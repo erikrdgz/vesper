@@ -1,15 +1,22 @@
 /**
  * The frame: one set of screens, two sets of chrome.
  *
- * Desktop is a terminal. A command bar carries the navigation, a ticker
- * runs underneath it, and the rest of the window is a grid of panes that
- * fills the viewport and does not scroll as a page — panes that need more
- * room scroll inside themselves, the way a real terminal's blotter does.
- * There is no sidebar and no max-width: the content is the instrument, not
- * an article about one.
+ * Desktop is a terminal. A command bar carries the navigation, the watch
+ * rail runs along the bottom, and the window between them is a grid of
+ * panes that fills the viewport and does not scroll as a page — panes that
+ * need more room scroll inside themselves, the way a real terminal's
+ * blotter does. There is no sidebar and no max-width: the content is the
+ * instrument, not an article about one.
  *
  * Mobile is a phone app. The same panes stack into one scrolling column
- * under a bottom tab bar with the add button raised out of it.
+ * above the watch rail and a bottom tab bar with the add button raised out
+ * of it.
+ *
+ * The rail is at the bottom on both, and that is the whole reason this
+ * comment changed: it used to be the first thing on the screen, so every
+ * screen opened on six prices nobody asked for and the greeting came
+ * second. Prices are ambient — they belong in the chrome at the foot of
+ * the window, where a ticker has always lived.
  */
 
 import React from "react";
@@ -230,16 +237,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <View style={styles.root}>
         <CommandBar />
-        <Watchlist />
         <View style={styles.desktopBody}>{children}</View>
+        <Watchlist />
       </View>
     );
   }
 
   return (
     <View style={styles.root}>
-      <Watchlist />
       {children}
+      <Watchlist />
       <TabBar />
     </View>
   );
@@ -252,8 +259,7 @@ const styles = StyleSheet.create({
   },
   desktopBody: {
     flex: 1,
-    paddingHorizontal: layout.paneInset,
-    paddingBottom: layout.paneInset,
+    padding: layout.paneInset,
   },
   desktopScreen: {
     flex: 1,
@@ -263,13 +269,21 @@ const styles = StyleSheet.create({
     // rather than compressing to their headers.
     flexGrow: 1,
     minHeight: 620,
+    // The same rule the grid uses between panes. Top-level children of a
+    // screen are laid out here rather than in a `Grid`, so without this
+    // the hero block and the row beneath it butt up against each other.
+    gap: layout.paneGap,
   },
   mobileScroll: {
     flex: 1,
   },
   mobileContent: {
-    paddingHorizontal: layout.paneInset,
-    paddingBottom: layout.tabBarHeight + space.xxl,
+    padding: layout.paneInset,
+    // The tab bar and the watch rail are siblings of the scroller, not
+    // things floating over it, so the column does not have to leave a
+    // tab bar's worth of blank space under the last pane. Only the raised
+    // add button overhangs, and only by a few points.
+    paddingBottom: space.lg,
   },
 
   tabBar: {
