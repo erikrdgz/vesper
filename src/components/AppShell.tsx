@@ -31,11 +31,23 @@ import {
 import { CommandBar, Grid, Watchlist } from "./terminal";
 import { Txt } from "./primitives";
 
-const TABS: { id: TabId; label: string; Icon: (props: IconProps) => React.ReactElement }[] = [
-  { id: "home", label: "Overview", Icon: HomeIcon },
-  { id: "analytics", label: "Analytics", Icon: AnalyticsIcon },
-  { id: "crypto", label: "Crypto", Icon: CryptoIcon },
-  { id: "settings", label: "Settings", Icon: SettingsIcon },
+/**
+ * `short` is what the bottom bar uses.
+ *
+ * Four 11px uppercase labels plus the raised button do not fit across a
+ * 375px phone: "OVERVIEW" and "ANALYTICS" ran into each other with no
+ * gap at all. The command bar has the room for the full words.
+ */
+const TABS: {
+  id: TabId;
+  label: string;
+  short: string;
+  Icon: (props: IconProps) => React.ReactElement;
+}[] = [
+  { id: "home", label: "Overview", short: "Home", Icon: HomeIcon },
+  { id: "analytics", label: "Analytics", short: "Charts", Icon: AnalyticsIcon },
+  { id: "crypto", label: "Crypto", short: "Crypto", Icon: CryptoIcon },
+  { id: "settings", label: "Settings", short: "You", Icon: SettingsIcon },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -102,8 +114,16 @@ function TabBar() {
 
   return (
     <View style={styles.tabBar} accessibilityRole="tablist" accessibilityLabel="Sections">
-      {left.map(({ id, label, Icon }) => (
-        <TabButton key={id} id={id} label={label} Icon={Icon} active={id === tab} onPress={setTab} />
+      {left.map(({ id, label, short, Icon }) => (
+        <TabButton
+          key={id}
+          id={id}
+          label={label}
+          short={short}
+          Icon={Icon}
+          active={id === tab}
+          onPress={setTab}
+        />
       ))}
 
       <Pressable
@@ -115,8 +135,16 @@ function TabBar() {
         <PlusIcon size={24} tone={color.accentInk} strokeWidth={2.25} />
       </Pressable>
 
-      {right.map(({ id, label, Icon }) => (
-        <TabButton key={id} id={id} label={label} Icon={Icon} active={id === tab} onPress={setTab} />
+      {right.map(({ id, label, short, Icon }) => (
+        <TabButton
+          key={id}
+          id={id}
+          label={label}
+          short={short}
+          Icon={Icon}
+          active={id === tab}
+          onPress={setTab}
+        />
       ))}
     </View>
   );
@@ -125,12 +153,14 @@ function TabBar() {
 function TabButton({
   id,
   label,
+  short,
   Icon,
   active,
   onPress,
 }: {
   id: TabId;
   label: string;
+  short: string;
   Icon: (props: IconProps) => React.ReactElement;
   active: boolean;
   onPress: (id: TabId) => void;
@@ -144,8 +174,8 @@ function TabButton({
       style={styles.tabButton}
     >
       <Icon size={22} tone={active ? color.accent : color.textMuted} />
-      <Txt variant="micro" tone={active ? "accent" : "textMuted"}>
-        {label}
+      <Txt variant="micro" tone={active ? "accent" : "textMuted"} numberOfLines={1}>
+        {short}
       </Txt>
     </Pressable>
   );
