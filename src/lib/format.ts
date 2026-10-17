@@ -135,6 +135,29 @@ export function chartTime(epochMs: number, range: string): string {
  * product is named for. The other two still have to be right, because a
  * finance app that tells you good evening at 9am reads as broken.
  */
+/**
+ * "Friday, 17 October". The day the opening is addressed from.
+ *
+ * No year. Anyone reading a dashboard knows what year it is, and the line
+ * is there to anchor the greeting to a day rather than to file it.
+ */
+export function today(now = new Date()): string {
+  return now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+}
+
+/**
+ * "10 Oct". The short form a chart's axis wants.
+ *
+ * `chartTime` carries a time of day with it, which is right for a readout
+ * that follows the pointer and far too much for a label that sits under
+ * one end of a week-long line.
+ */
+export function shortDate(epochMs: number): string {
+  const date = new Date(epochMs);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 export function greeting(now = new Date()): string {
   const hour = now.getHours();
   if (hour < 12) return "Good morning";

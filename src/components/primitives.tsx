@@ -496,5 +496,9 @@ const styles = StyleSheet.create({
   avatar: {
     alignItems: "center",
     justifyContent: "center",
+    // A ring. Without it the disc is a coloured hole in whatever is
+    // behind it; with it, it reads as a token someone placed.
+    borderWidth: 1,
+    borderColor: color.hairlineStrong,
   },
 });

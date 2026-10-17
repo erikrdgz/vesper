@@ -177,10 +177,15 @@ export function AreaChart({
     >
       <Svg width={width} height={height}>
         <Defs>
+          {/* The fill is a glow under the line, not a block of colour
+              beneath it. Lime at 0.38 over the card surface mixes to a
+              flat olive, and on a hero chart that is 300pt tall the eye
+              reads the slab rather than the line; the stops fall away
+              faster now and reach nothing before the floor. */}
           <LinearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={tone} stopOpacity="0.38" />
-            <Stop offset="0.55" stopColor={tone} stopOpacity="0.12" />
-            <Stop offset="1" stopColor={tone} stopOpacity="0.02" />
+            <Stop offset="0" stopColor={tone} stopOpacity="0.30" />
+            <Stop offset="0.45" stopColor={tone} stopOpacity="0.08" />
+            <Stop offset="1" stopColor={tone} stopOpacity="0" />
           </LinearGradient>
         </Defs>
 

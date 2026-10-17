@@ -22,6 +22,8 @@ import {
   greeting,
   plural,
   pct,
+  shortDate,
+  today,
   transactionDate,
   usd,
   usdParts,
@@ -187,49 +189,73 @@ export function OverviewScreen() {
               </View>
             }
           >
-            <AnimatedNumber
-              value={balance.major + balance.minor}
-              variant="displayXl"
-              minorVariant="display"
-              minorTone={color.textSecondary}
-              minorFrom={balance.major.length}
-            />
-            <View style={styles.returnRow}>
-              <Txt variant="micro" tone="textMuted">
-                Total return
-              </Txt>
-              <Txt variant="mono" tone={netWorth.gainUsd >= 0 ? "positive" : "negative"}>
-                {usdSigned(netWorth.gainUsd)} · {pct(netWorth.gainPct)}
-              </Txt>
-              <Txt variant="micro" tone="textMuted">
-                on {usd(netWorth.costUsd)} invested
-              </Txt>
+            {/* On a desktop pane the figure and the four actions share
+                one band: the number only ever fills the left third, and
+                a stack of two left-aligned blocks left half the hero
+                empty and took that height off the chart. On a phone they
+                stay stacked — there is no width to share. */}
+            <View style={isDesktop ? styles.heroBand : undefined}>
+              <View>
+                <AnimatedNumber
+                  value={balance.major + balance.minor}
+                  variant="displayXl"
+                  minorVariant="display"
+                  minorTone={color.textSecondary}
+                  minorFrom={balance.major.length}
+                />
+
+                {/* Two labelled figures with a rule between them, rather
+                    than one sentence of alternating case and colour. The
+                    old run wrapped mid-phrase on a phone — "on
+                    $102,020.00 invested" landed on its own line under a
+                    number it was no longer next to. */}
+                <View style={styles.stats}>
+                  <View style={styles.stat}>
+                    <Txt variant="micro" tone="textMuted">
+                      Total return
+                    </Txt>
+                    <Txt variant="mono" tone={netWorth.gainUsd >= 0 ? "positive" : "negative"}>
+                      {usdSigned(netWorth.gainUsd)} · {pct(netWorth.gainPct)}
+                    </Txt>
+                  </View>
+                  <View style={styles.statRule} />
+                  <View style={styles.stat}>
+                    <Txt variant="micro" tone="textMuted">
+                      Invested
+                    </Txt>
+                    <Txt variant="mono" tone="textSecondary">
+                      {usd(netWorth.costUsd)}
+                    </Txt>
+                  </View>
+                </View>
+              </View>
+
+              {/* Something to do, beside the number. The hero used to
+                  be a figure and a chart and no way to act on either. */}
+              <View style={[styles.quickRow, isDesktop && styles.quickRowInline]}>
+                <Quick
+                  label="Add"
+                  icon={<PlusIcon size={18} tone={color.accent} />}
+                  onPress={() => openSheet("add-asset")}
+                />
+                <Quick
+                  label="Swap"
+                  icon={<SwapIcon size={18} tone={color.accent} />}
+                  onPress={() => setTab("exchange")}
+                />
+                <Quick
+                  label="Watch"
+                  icon={<WatchIcon size={18} tone={color.accent} />}
+                  onPress={() => setTab("watch")}
+                />
+                <Quick
+                  label="Charts"
+                  icon={<AnalyticsIcon size={18} tone={color.accent} />}
+                  onPress={() => setTab("analytics")}
+                />
+              </View>
             </View>
 
-            {/* Something to do, right under the number. The hero used to
-                be a figure and a chart and no way to act on either. */}
-            <View style={styles.quickRow}>
-              <Quick
-                label="Add"
-                icon={<PlusIcon size={18} tone={color.accent} />}
-                onPress={() => openSheet("add-asset")}
-              />
-              <Quick
-                label="Swap"
-                icon={<SwapIcon size={18} tone={color.accent} />}
-                onPress={() => setTab("exchange")}
-              />
-              <Quick
-                label="Watch"
-                icon={<WatchIcon size={18} tone={color.accent} />}
-                onPress={() => setTab("watch")}
-              />
-              <Quick
-                label="Charts"
-                icon={<AnalyticsIcon size={18} tone={color.accent} />}
-                onPress={() => setTab("analytics")}
-              />
-            </View>
             <ChartFill
               points={series.points}
               loading={series.loading}
@@ -356,7 +382,19 @@ function Opening({ children }: { children?: React.ReactNode }) {
           breaks after the comma. The avatar rides the name line for the
           same reason — sharing the first line would squeeze the longest
           greeting into two of its own. */}
-      <Txt variant="greeting">{greeting()},</Txt>
+      <View style={styles.openingTop}>
+        <Txt variant="greeting">{greeting()},</Txt>
+        {/* The date, on the greeting's own baseline. A band this wide
+            with everything crowded into its left third reads as an
+            accident; two anchors and the width is the composition. It
+            is desktop-only because a phone has no width to anchor and
+            the avatar is already holding that corner. */}
+        {isDesktop && (
+          <Txt variant="micro" tone="textMuted">
+            {today()}
+          </Txt>
+        )}
+      </View>
       <View style={styles.openingName}>
         <Txt variant="greeting" heading>
           {firstName(profile.name)}
@@ -408,19 +446,38 @@ function ChartFill({
     );
   }
 
+  const start = points[0];
+
   return (
-    <View style={styles.chartFill} onLayout={measured.onLayout}>
-      {measured.ready && (
-        <AreaChart
-          points={points}
-          width={measured.width}
-          height={measured.height}
-          dimmed={loading && points.length === 0}
-          crosshair
-          range={RANGE}
-        />
-      )}
-    </View>
+    <>
+      <View style={styles.chartFill} onLayout={measured.onLayout}>
+        {measured.ready && (
+          <AreaChart
+            points={points}
+            width={measured.width}
+            height={measured.height}
+            dimmed={loading && points.length === 0}
+            crosshair
+            range={RANGE}
+          />
+        )}
+      </View>
+
+      {/* Both ends of the line, named. A week of someone's net worth
+          drawn with no axis at all is decoration: it could be an hour
+          or a decade, and the shape means nothing until you know
+          which. */}
+      {start ? (
+        <View style={styles.chartAxis}>
+          <Txt variant="micro" tone="textMuted">
+            {shortDate(start.t)}
+          </Txt>
+          <Txt variant="micro" tone="textMuted">
+            Now
+          </Txt>
+        </View>
+      ) : null}
+    </>
   );
 }
 
@@ -462,7 +519,14 @@ function FlowFill({ flow }: { flow: ReturnType<typeof summariseFlow> }) {
   );
 }
 
-/** A circular quick action, as the references use under a balance. */
+/**
+ * A circular quick action, as the references use under a balance.
+ *
+ * Sized on desktop, shared out on a phone. Four flexed children strung
+ * across a 1300pt pane put a hundred points of nothing between each
+ * icon and the next, which reads as four unrelated buttons rather than
+ * one set; on a 330pt pane the same flex is exactly right.
+ */
 function Quick({
   label,
   icon,
@@ -472,8 +536,15 @@ function Quick({
   icon: React.ReactNode;
   onPress: () => void;
 }) {
+  const { isDesktop } = useResponsive();
+
   return (
-    <Tap onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={{ flex: 1 }}>
+    <Tap
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={isDesktop ? styles.quickSlot : styles.quickFill}
+    >
       <View style={styles.quick}>
         <View style={styles.quickIcon}>{icon}</View>
         <Txt variant="micro" tone="textSecondary">
@@ -676,6 +747,14 @@ const styles = StyleSheet.create({
     paddingTop: space.lg,
     paddingBottom: space.sm,
   },
+  openingTop: {
+    flexDirection: "row",
+    // The date sits on the greeting's baseline, not its box: against
+    // a 46pt line any other alignment puts it visibly adrift.
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: space.md,
+  },
   openingName: {
     flexDirection: "row",
     alignItems: "center",
@@ -692,10 +771,28 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: "stretch",
   },
+  heroBand: {
+    flexDirection: "row",
+    // The actions sit on the figure's floor, not its middle: aligned to
+    // the bottom, the row of labels and the "invested" line read as one
+    // baseline across the band.
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: space.xl,
+  },
   quickRow: {
     flexDirection: "row",
-    gap: space.xs,
-    marginTop: space.sm,
+    gap: space.sm,
+    marginTop: space.md,
+  },
+  quickRowInline: {
+    marginTop: 0,
+  },
+  quickSlot: {
+    width: 76,
+  },
+  quickFill: {
+    flex: 1,
   },
   quick: {
     alignItems: "center",
@@ -738,11 +835,16 @@ const styles = StyleSheet.create({
     gap: space.xs,
     marginTop: space.xs,
   },
-  returnRow: {
+  stats: {
     flexDirection: "row",
-    alignItems: "baseline",
-    flexWrap: "wrap",
-    gap: space.xs,
+    alignItems: "center",
+    gap: space.md,
+    marginTop: space.xs,
+  },
+  statRule: {
+    width: 1,
+    alignSelf: "stretch",
+    backgroundColor: color.hairline,
   },
   chartEmpty: {
     alignItems: "center",
@@ -757,7 +859,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 120,
     marginHorizontal: -space.sm,
-    marginBottom: -space.xs,
+  },
+  chartAxis: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: space.xs,
   },
   fill: {
     flex: 1,
