@@ -11,15 +11,15 @@
  * occupies on a real one, because that is where the eye goes looking.
  */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useVesper } from "../hooks/useVesper";
 import { pct, tokenAmount, usd, usdSigned } from "../lib/format";
-import { duration, ease, nativeDriver, radius, shadow, space, type } from "../theme";
+import { duration, ease, nativeDriver, radius, shadow, space, spring, type } from "../theme";
 import type { DeFiAsset, ValuedAsset } from "../types";
-import { CoinGlyph } from "./coins";
+import { CoinMark } from "./coins";
 import { Txt } from "./primitives";
 
 /**
@@ -49,30 +49,70 @@ interface TokenCardProps {
   /** Raised and fully legible when true. */
   active: boolean;
   onPress: () => void;
-  /** How far this card is pulled up over the one before it. */
+  /** How far this card is pulled up over the one before it. Stack only. */
   overlap: number;
   index: number;
+  /**
+   * `stack` is the hand of cards a phone gets; `rail` is the row a window
+   * has the width for, where every card is already face up.
+   */
+  layout?: "stack" | "rail";
+  /** The card at the front of the hand. It gets the light. */
+  glow?: boolean;
 }
 
-export function TokenCard({ entry, active, onPress, overlap, index }: TokenCardProps) {
+export function TokenCard({
+  entry,
+  active,
+  onPress,
+  overlap,
+  index,
+  layout = "stack",
+  glow,
+}: TokenCardProps) {
   const { reduceMotion } = useVesper();
   const asset = entry.asset as DeFiAsset;
   const skin = cardSkin(asset.symbol);
+  const rail = layout === "rail";
 
-  const lift = useRef(new Animated.Value(0)).current;
+  const hover = useRef(new Animated.Value(0)).current;
+  const raise = useRef(new Animated.Value(active ? 1 : 0)).current;
 
   function to(value: number) {
     if (reduceMotion) {
-      lift.setValue(value);
+      hover.setValue(value);
       return;
     }
-    Animated.timing(lift, {
+    Animated.timing(hover, {
       toValue: value,
       duration: duration.short,
       easing: ease.standard,
       useNativeDriver: nativeDriver,
     }).start();
   }
+
+  /**
+   * Selection is a spring, not a cut.
+   *
+   * Picking a card used to move it to the end of the list, which is a
+   * reorder: every card below it jumped a slot in one frame and the one
+   * you picked appeared somewhere else. Nothing moves in the layout now
+   * — the chosen card is painted over its neighbours and rises under a
+   * spring, which is what a card does when a hand pulls it out.
+   */
+  useEffect(() => {
+    if (reduceMotion) {
+      raise.setValue(active ? 1 : 0);
+      return;
+    }
+    const animation = Animated.spring(raise, {
+      toValue: active ? 1 : 0,
+      ...spring.press,
+      useNativeDriver: nativeDriver,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [active, raise, reduceMotion]);
 
   const muted = `rgba(${hexToRgb(skin.ink)}, 0.62)`;
 
@@ -84,21 +124,40 @@ export function TokenCard({ entry, active, onPress, overlap, index }: TokenCardP
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${asset.label}, ${usd(entry.valueUsd)}`}
-      // Only the first card sits flush; every other one climbs over its
-      // predecessor, which is what makes the stack read as a stack.
-      style={[styles.slot, index > 0 && { marginTop: -overlap }]}
+      // In the stack, only the first card sits flush and every other one
+      // climbs over its predecessor — that overlap is what makes it read
+      // as a stack. On the rail they sit side by side, and the selected
+      // card is lifted above its neighbours rather than reordered.
+      style={[
+        rail ? styles.railSlot : styles.slot,
+        !rail && index > 0 && { marginTop: -overlap },
+        { zIndex: active ? 50 : index },
+      ]}
     >
       <Animated.View
         style={[
           styles.card,
           shadow.lifted,
+          // The front card's own colour, thrown onto the ground under
+          // it. One card glows at a time: a deck where every card is lit
+          // is a deck with no front.
+          glow && {
+            shadowColor: skin.from,
+            shadowOpacity: 0.5,
+            shadowRadius: 34,
+            shadowOffset: { width: 0, height: 14 },
+            elevation: 16,
+          },
           {
             transform: [
               {
                 translateY: Animated.add(
-                  lift.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }),
-                  new Animated.Value(active ? -10 : 0),
+                  hover.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }),
+                  raise.interpolate({ inputRange: [0, 1], outputRange: [0, -14] }),
                 ),
+              },
+              {
+                scale: raise.interpolate({ inputRange: [0, 1], outputRange: [1, 1.025] }),
               },
             ],
           },
@@ -112,7 +171,10 @@ export function TokenCard({ entry, active, onPress, overlap, index }: TokenCardP
         >
           <View style={styles.faceTop}>
             <View style={styles.markRow}>
-              <CoinGlyph symbol={asset.symbol} size={22} tone={skin.ink} />
+              {/* A dark medallion with the token's mark in its own light
+                  tone, the way a card carries a chip. Drawn in the card's
+                  ink it was a black silhouette on a bright face. */}
+              <CoinMark symbol={asset.symbol} size={26} disc={skin.ink} ink={skin.from} />
               <Txt variant="title" style={{ color: skin.ink }}>
                 {asset.label}
               </Txt>
@@ -156,10 +218,15 @@ function hexToRgb(hex: string): string {
 /** Height of a card, and how much of the one below stays visible. */
 export const CARD_HEIGHT = 168;
 export const CARD_PEEK = 62;
+/** A card on the rail, where width is the thing in short supply. */
+export const CARD_WIDTH = 252;
 
 const styles = StyleSheet.create({
   slot: {
     width: "100%",
+  },
+  railSlot: {
+    width: CARD_WIDTH,
   },
   card: {
     height: CARD_HEIGHT,

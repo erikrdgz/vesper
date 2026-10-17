@@ -10,8 +10,8 @@
  * burying that in a footer link would be the cowardly version.
  */
 
-import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { useNetWorth } from "../hooks/useNetWorth";
 import { useNavigation } from "../hooks/useNavigation";
@@ -65,17 +65,25 @@ export function WalletScreen() {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<ImportResult | null>(null);
 
-  const holdings = useMemo(() => {
-    const cards = netWorth.valued.filter((entry) => isDeFi(entry.asset));
-    if (!selectedCard) return cards;
+  /**
+   * The deck, in a fixed order.
+   *
+   * Picking a card used to move it to the end of this list so that it
+   * was painted last and nothing covered its body. That works, and it
+   * costs a reorder: every card below the one you touched jumped a slot
+   * in a single frame. The order is stable now and the card is raised
+   * where it stands, over its neighbours, under a spring.
+   */
+  const holdings = useMemo(
+    () => netWorth.valued.filter((entry) => isDeFi(entry.asset)),
+    [netWorth.valued],
+  );
 
-    // The selected card is drawn last, which in a downward stack puts it
-    // on top with nothing covering its body. Lifting it in place looked
-    // like a hover state and left the card you picked still unreadable.
-    const picked = cards.find((entry) => entry.asset.id === selectedCard);
-    if (!picked) return cards;
-    return [...cards.filter((entry) => entry.asset.id !== selectedCard), picked];
-  }, [netWorth.valued, selectedCard]);
+  // Nothing picked yet: the front of a downward stack is the card on
+  // top of it — the last one — and the front of a rail is the one you
+  // read first. The glow belongs to whichever that is.
+  const defaultFront = isDesktop ? holdings[0] : holdings[holdings.length - 1];
+  const frontCard = selectedCard ?? defaultFront?.asset.id ?? null;
 
   const tokens = assets.filter(isDeFi).length;
 
@@ -138,13 +146,15 @@ export function WalletScreen() {
                 <Action label="Add a token" onPress={() => openSheet("add-asset")} />
               </>
             ) : (
-              <View style={styles.deck}>
+              <Deck horizontal={isDesktop}>
                 {holdings.map((entry, index) => (
                   <TokenCard
                     key={entry.asset.id}
                     entry={entry}
                     index={index}
+                    layout={isDesktop ? "rail" : "stack"}
                     active={selectedCard === entry.asset.id}
+                    glow={frontCard === entry.asset.id}
                     overlap={CARD_HEIGHT - CARD_PEEK}
                     onPress={() => {
                       // Tapping the front card opens it; tapping any
@@ -159,7 +169,7 @@ export function WalletScreen() {
                     }}
                   />
                 ))}
-              </View>
+              </Deck>
             )}
           </Pane>
 
@@ -408,6 +418,29 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
   );
 }
 
+/**
+ * The deck: a hand on a phone, a rail in a window.
+ *
+ * Stacked cards are the right answer at 330pt, where there is room for
+ * one card and a glimpse of the next. Given a window the same stack is
+ * a column of slivers with acres of empty beside it — so the cards go
+ * side by side, face up, and the row scrolls.
+ */
+function Deck({ horizontal, children }: { horizontal: boolean; children: React.ReactNode }) {
+  if (!horizontal) return <View style={styles.deck}>{children}</View>;
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.rail}
+      contentContainerStyle={styles.railRun}
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
   identity: {
     flexDirection: "row",
@@ -444,6 +477,18 @@ const styles = StyleSheet.create({
     // container only needs to stop them being clipped as they lift.
     paddingTop: space.xs,
     paddingBottom: space.sm,
+  },
+  rail: {
+    // A lifted card grows past its slot in both directions, and a
+    // scroller clips to its own box, so the run carries the room.
+    marginHorizontal: -space.sm,
+  },
+  railRun: {
+    flexDirection: "row",
+    gap: space.sm,
+    paddingHorizontal: space.sm,
+    paddingTop: space.md,
+    paddingBottom: space.lg,
   },
   chips: {
     flexDirection: "row",

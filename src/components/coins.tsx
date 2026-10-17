@@ -117,20 +117,40 @@ function Glyph({ symbol, ink }: { symbol: string; ink: string }) {
   }
 }
 
+/** Mixes a brand colour toward the ground, for a disc a white mark can sit on. */
+function deepen(hex: string, amount: number): string {
+  const clean = hex.replace("#", "");
+  const value = parseInt(clean.length === 3 ? clean.replace(/./g, "$&$&") : clean, 16);
+  const mix = (channel: number, floor: number) =>
+    Math.round(channel + (floor - channel) * amount);
+
+  return `rgb(${mix((value >> 16) & 255, 11)}, ${mix((value >> 8) & 255, 14)}, ${mix(value & 255, 20)})`;
+}
+
 /**
  * A token's mark on its own disc.
  *
- * The ink is near-black rather than white: every one of these brand
- * colours is mid-to-light, and white on them fails contrast badly.
+ * The mark is white, which is how every one of these is actually drawn —
+ * a white bitcoin on orange, a white chainlink cube on blue. It was
+ * near-black on the theory that these brand colours are too light to
+ * carry white, and the result was eight silhouettes: recognisable as
+ * holes punched in a disc rather than as logos. The disc is mixed a
+ * third of the way toward the ground instead, which buys the contrast
+ * back without touching the hue.
  */
-export function CoinMark({ symbol, size = 24 }: CoinProps) {
-  const tone = tokenColor(symbol);
+export function CoinMark({
+  symbol,
+  size = 24,
+  disc,
+  ink = "#FFFFFF",
+}: CoinProps & { disc?: string; ink?: string }) {
+  const tone = disc ?? deepen(tokenColor(symbol), 0.3);
 
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size} viewBox="0 0 24 24">
         <Circle cx="12" cy="12" r="12" fill={tone} />
-        <Glyph symbol={symbol} ink="#0B0E14" />
+        <Glyph symbol={symbol} ink={ink} />
       </Svg>
     </View>
   );

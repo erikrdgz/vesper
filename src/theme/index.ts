@@ -202,10 +202,18 @@ export const type = {
    */
   greeting: {
     fontFamily,
-    fontSize: 40,
-    lineHeight: 46,
+    fontSize: 42,
+    lineHeight: 47,
     fontWeight: "600",
-    letterSpacing: -1.2,
+    letterSpacing: -1.3,
+  },
+  /** The same line with a window to fill. Desktop only. */
+  greetingXl: {
+    fontFamily,
+    fontSize: 58,
+    lineHeight: 63,
+    fontWeight: "600",
+    letterSpacing: -2,
   },
   /** The one hero balance per screen. */
   displayXl: {

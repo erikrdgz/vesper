@@ -160,10 +160,19 @@ export function shortDate(epochMs: number): string {
 
 export function greeting(now = new Date()): string {
   const hour = now.getHours();
+
+  // Five bands rather than three. "Good morning" at 05:40 and "Good
+  // evening" at 01:00 are both technically true and both read like a
+  // form letter; the app knows what time it is, so it may as well say
+  // something only true at that hour.
+  if (hour < 5) return "Still up";
+  if (hour < 8) return "Up early";
   if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 17) return "Good afternoon";
+  if (hour < 22) return "Good evening";
+  return "Late one";
 }
+
 
 /** "Leonard Lopez" -> "Leonard". For a greeting, not a label. */
 export const firstName = (full: string): string => full.trim().split(/\s+/)[0] ?? full;

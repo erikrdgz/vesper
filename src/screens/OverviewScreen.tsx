@@ -45,6 +45,7 @@ import {
   WatchIcon,
 } from "../components/icons";
 import { Action, Avatar, Delta, Divider, Tap, Txt } from "../components/primitives";
+import { Reveal } from "../components/Reveal";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
 import { TokenObject, tokenColor } from "../components/TokenObject";
@@ -139,37 +140,7 @@ export function OverviewScreen() {
 
   return (
     <Screen>
-      <Opening>
-        <View style={styles.say}>
-          <View
-            style={[
-              styles.sayTick,
-              {
-                backgroundColor:
-                  say.tone === "up"
-                    ? color.positive
-                    : say.tone === "down"
-                      ? color.negative
-                      : color.hairlineStrong,
-              },
-            ]}
-          />
-          <View style={{ flex: 1 }}>
-            {/* Only a returning visitor gets this, and only after a
-                real gap. It leads, because it is the one thing they
-                could not have known already. */}
-            {welcomeBack ? <Txt variant="h2">{welcomeBack}</Txt> : null}
-            <Txt variant={welcomeBack ? "body" : "h2"} tone={welcomeBack ? "textSecondary" : "text"}>
-              {say.lead}
-            </Txt>
-            {say.detail ? (
-              <Txt variant="body" tone="textSecondary">
-                {say.detail}
-              </Txt>
-            ) : null}
-          </View>
-        </View>
-      </Opening>
+      <Opening say={say} welcomeBack={welcomeBack} />
 
       <Row flex={1}>
         <Column flex={2.2}>
@@ -366,14 +337,29 @@ export function OverviewScreen() {
  * Deliberately not a pane. The first thing on the screen should read as
  * someone speaking to you, and a greeting inside a bento block reads as a
  * caption on the block — which is what it was, two lines of grey label
- * boxed between the watch bar and the balance. It is on the ground now,
- * at the top of the column, a size up from the balance below it and in
- * plain white, with the narration tucked under it as `children`.
+ * boxed between the watch bar and the balance.
+ *
+ * It is three sizes of one thought: who you are to the app, what
+ * happened, and the detail behind it. The middle line is the point —
+ * "Good evening, Erik" on its own is a form letter, and the app knows
+ * enough to say something only true of today. The lines rise in on a
+ * stagger rather than appearing finished, which is the difference
+ * between an app that opens and a page that loads.
  */
-function Opening({ children }: { children?: React.ReactNode }) {
+function Opening({
+  say,
+  welcomeBack,
+}: {
+  say?: ReturnType<typeof headline>;
+  welcomeBack?: string | null;
+}) {
   const { profile } = useVesper();
   const { setTab } = useNavigation();
   const { isDesktop } = useResponsive();
+
+  // A phone has 330pt to give a line; a window has four times that, and
+  // a greeting set for the phone looks lost in it.
+  const big = isDesktop ? "greetingXl" : "greeting";
 
   return (
     <View style={styles.opening}>
@@ -382,37 +368,63 @@ function Opening({ children }: { children?: React.ReactNode }) {
           breaks after the comma. The avatar rides the name line for the
           same reason — sharing the first line would squeeze the longest
           greeting into two of its own. */}
-      <View style={styles.openingTop}>
-        <Txt variant="greeting">{greeting()},</Txt>
-        {/* The date, on the greeting's own baseline. A band this wide
-            with everything crowded into its left third reads as an
-            accident; two anchors and the width is the composition. It
-            is desktop-only because a phone has no width to anchor and
-            the avatar is already holding that corner. */}
-        {isDesktop && (
-          <Txt variant="micro" tone="textMuted">
-            {today()}
+      <Reveal index={0}>
+        <View style={styles.openingTop}>
+          <Txt variant={big}>{greeting()},</Txt>
+          {/* The date, on the greeting's own baseline. A band this wide
+              with everything crowded into its left third reads as an
+              accident; two anchors and the width is the composition. */}
+          {isDesktop && (
+            <Txt variant="micro" tone="textMuted">
+              {today()}
+            </Txt>
+          )}
+        </View>
+      </Reveal>
+
+      <Reveal index={1}>
+        <View style={styles.openingName}>
+          <Txt variant={big} heading>
+            {firstName(profile.name)}
           </Txt>
-        )}
-      </View>
-      <View style={styles.openingName}>
-        <Txt variant="greeting" heading>
-          {firstName(profile.name)}
-        </Txt>
-        {/* Mobile only. The desktop command bar already carries the
-            avatar, and two of them stacked up the right-hand edge is one
-            portrait of you too many. */}
-        {!isDesktop && (
-          <Tap
-            onPress={() => setTab("wallet")}
-            accessibilityRole="button"
-            accessibilityLabel="Open your wallet"
+          {/* Mobile only. The desktop command bar already carries the
+              avatar, and two of them stacked up the right-hand edge is
+              one portrait of you too many. */}
+          {!isDesktop && (
+            <Tap
+              onPress={() => setTab("wallet")}
+              accessibilityRole="button"
+              accessibilityLabel="Open your wallet"
+            >
+              <Avatar name={profile.name} size={48} />
+            </Tap>
+          )}
+        </View>
+      </Reveal>
+
+      {say ? (
+        <Reveal index={2} style={styles.say}>
+          {/* Only a returning visitor gets this, and only after a real
+              gap. It leads, because it is the one thing they could not
+              have known already. */}
+          {welcomeBack ? (
+            <Txt variant="h2" tone="textSecondary">
+              {welcomeBack}
+            </Txt>
+          ) : null}
+          <Txt
+            variant="h1"
+            tone={say.tone === "up" ? "positive" : say.tone === "down" ? "negative" : "text"}
           >
-            <Avatar name={profile.name} size={48} />
-          </Tap>
-        )}
-      </View>
-      {children}
+            {say.lead}
+          </Txt>
+          {say.detail ? (
+            <Txt variant="body" tone="textSecondary">
+              {say.detail}
+            </Txt>
+          ) : null}
+        </Reveal>
+      ) : null}
     </View>
   );
 }
@@ -762,14 +774,9 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   say: {
-    flexDirection: "row",
-    gap: space.sm,
+    gap: 2,
     marginTop: space.lg,
-  },
-  sayTick: {
-    width: 3,
-    borderRadius: 2,
-    alignSelf: "stretch",
+    maxWidth: 560,
   },
   heroBand: {
     flexDirection: "row",
