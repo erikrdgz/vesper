@@ -29,16 +29,31 @@ import { Txt } from "./primitives";
 
 export type ToastTone = "neutral" | "positive" | "negative";
 
+/** An offer to take the action back, shown as a button in the toast. */
+export interface ToastAction {
+  label: string;
+  onPress: () => void;
+}
+
 interface Toast {
   id: number;
   title: string;
   detail?: string;
   tone: ToastTone;
+  action?: ToastAction;
 }
 
 interface ToastValue {
   /** Show a confirmation. Returns nothing; this is fire and forget. */
   toast: (title: string, detail?: string, tone?: ToastTone) => void;
+  /**
+   * A confirmation with a way back.
+   *
+   * For anything destructive. A toast that only reports a deletion is
+   * an obituary; one that offers to undo it is the difference between
+   * a mistake and a moment.
+   */
+  toastUndo: (title: string, detail: string | undefined, onUndo: () => void) => void;
 }
 
 const ToastContext = createContext<ToastValue | null>(null);
@@ -46,18 +61,41 @@ const ToastContext = createContext<ToastValue | null>(null);
 /** How long a toast stays. Long enough to read a number, short enough to ignore. */
 const DWELL_MS = 3600;
 
+/**
+ * An undoable toast stays longer.
+ *
+ * The usual dwell is tuned for "I saw that, carry on". Deciding you
+ * made a mistake and reaching for the button takes longer than
+ * registering that something happened.
+ */
+const UNDO_DWELL_MS = 7000;
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [current, setCurrent] = useState<Toast | null>(null);
   const nextId = useRef(0);
 
-  const toast = useCallback((title: string, detail?: string, tone: ToastTone = "neutral") => {
-    nextId.current += 1;
-    // One at a time, newest wins. A stack of toasts is a notification
-    // centre, which is a different thing and not one this app needs.
-    setCurrent({ id: nextId.current, title, detail, tone });
-  }, []);
+  const show = useCallback(
+    (title: string, detail: string | undefined, tone: ToastTone, action?: ToastAction) => {
+      nextId.current += 1;
+      // One at a time, newest wins. A stack of toasts is a notification
+      // centre, which is a different thing and not one this app needs.
+      setCurrent({ id: nextId.current, title, detail, tone, action });
+    },
+    [],
+  );
 
-  const value = useMemo(() => ({ toast }), [toast]);
+  const toast = useCallback(
+    (title: string, detail?: string, tone: ToastTone = "neutral") => show(title, detail, tone),
+    [show],
+  );
+
+  const toastUndo = useCallback(
+    (title: string, detail: string | undefined, onUndo: () => void) =>
+      show(title, detail, "neutral", { label: "Undo", onPress: onUndo }),
+    [show],
+  );
+
+  const value = useMemo(() => ({ toast, toastUndo }), [toast, toastUndo]);
 
   return (
     <ToastContext.Provider value={value}>
@@ -81,7 +119,7 @@ function ToastView({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   useEffect(() => {
     if (reduceMotion) {
       progress.setValue(1);
-      const timer = setTimeout(onDismiss, DWELL_MS);
+      const timer = setTimeout(onDismiss, toast.action ? UNDO_DWELL_MS : DWELL_MS);
       return () => clearTimeout(timer);
     }
 
@@ -102,13 +140,13 @@ function ToastView({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       }).start(({ finished }) => {
         if (finished) onDismiss();
       });
-    }, DWELL_MS);
+    }, toast.action ? UNDO_DWELL_MS : DWELL_MS);
 
     return () => {
       enter.stop();
       clearTimeout(timer);
     };
-  }, [progress, reduceMotion, onDismiss]);
+  }, [progress, reduceMotion, onDismiss, toast.action]);
 
   const accent =
     toast.tone === "positive"
@@ -152,6 +190,22 @@ function ToastView({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
           </Txt>
         ) : null}
       </View>
+      {toast.action && (
+        <Pressable
+          onPress={() => {
+            toast.action?.onPress();
+            onDismiss();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={toast.action.label}
+          style={styles.undo}
+        >
+          <Txt variant="micro" tone="accentInk">
+            {toast.action.label.toUpperCase()}
+          </Txt>
+        </Pressable>
+      )}
+
       <Pressable
         onPress={onDismiss}
         accessibilityRole="button"
@@ -168,7 +222,7 @@ export function useToast(): ToastValue {
   const context = useContext(ToastContext);
   // Deliberately forgiving: a component that confirms an action should
   // not crash the screen because it was rendered outside the provider.
-  return context ?? { toast: () => {} };
+  return context ?? { toast: () => {}, toastUndo: () => {} };
 }
 
 const styles = StyleSheet.create({
@@ -203,6 +257,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
     paddingVertical: space.sm,
+  },
+  undo: {
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: color.accent,
   },
   close: {
     width: 28,

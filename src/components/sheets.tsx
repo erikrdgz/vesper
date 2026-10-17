@@ -664,9 +664,9 @@ export function AlertSheet() {
  */
 export function PositionSheet() {
   const { positionId, closePosition, setTab, openAsset, openSheet } = useNavigation();
-  const { assets, removeAsset, toggleWatch, watchlist } = useVesper();
+  const { assets, removeAsset, toggleWatch, watchlist, captureBook, restoreBook } = useVesper();
   const netWorth = useNetWorth();
-  const { toast } = useToast();
+  const { toast, toastUndo } = useToast();
 
   const asset = assets.find((candidate) => candidate.id === positionId);
   const valued = netWorth.valued.find((entry) => entry.asset.id === positionId);
@@ -715,8 +715,9 @@ export function PositionSheet() {
     detail: "It stops counting toward your net worth",
     danger: true,
     onPress: () => {
+      const before = captureBook();
       removeAsset(asset.id);
-      toast(`${asset.label} removed`, "It is out of your book.");
+      toastUndo(`${asset.label} removed`, "It is out of your book.", () => restoreBook(before));
     },
   });
 

@@ -235,9 +235,9 @@ function HoldingRow({
   onSelect: () => void;
 }) {
   const asset = entry.asset as DeFiAsset;
-  const { prices, removeAsset } = useVesper();
+  const { prices, removeAsset, captureBook, restoreBook } = useVesper();
   const { openPosition, openSheet } = useNavigation();
-  const { toast } = useToast();
+  const { toastUndo } = useToast();
   const price = prices.quotes[asset.coingeckoId]?.usd ?? 0;
   const series = useAssetSeries(asset.coingeckoId, "1W", price);
   const flash = useChangeFlash(Math.round(entry.valueUsd * 100));
@@ -263,8 +263,13 @@ function HoldingRow({
           ink: "#2A0A05",
           icon: <TrashIcon size={16} tone="#2A0A05" />,
           onPress: () => {
+            // Captured before the removal, so the closure below has
+            // something to put back.
+            const before = captureBook();
             removeAsset(asset.id);
-            toast(`${asset.label} removed`, "It is out of your book.");
+            toastUndo(`${asset.label} removed`, "It is out of your book.", () =>
+              restoreBook(before),
+            );
           },
         },
       ]}

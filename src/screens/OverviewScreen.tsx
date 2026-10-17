@@ -7,19 +7,20 @@
  * window and the holdings list scrolls inside its own pane.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { useMeasure } from "../hooks/useMeasure";
 import { useNavigation } from "../hooks/useNavigation";
 import { useNetWorth } from "../hooks/useNetWorth";
-import { headline } from "../lib/narrate";
+import { headline, sinceLastVisit } from "../lib/narrate";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAssetSeries, usePortfolioSeries } from "../hooks/useSeries";
 import { useVesper } from "../hooks/useVesper";
 import {
   firstName,
   greeting,
+  plural,
   pct,
   transactionDate,
   usd,
@@ -27,7 +28,7 @@ import {
   usdSigned,
   weight,
 } from "../lib/format";
-import { color, space } from "../theme";
+import { color, radius, space } from "../theme";
 import { isDeFi, type ChartRange, type DeFiAsset, type ValuedAsset } from "../types";
 import { Column, Row, Screen } from "../components/AppShell";
 import { AnimatedNumber } from "../components/AnimatedNumber";
@@ -48,9 +49,17 @@ import { TokenObject, tokenColor } from "../components/TokenObject";
 
 const RANGE: ChartRange = "1W";
 
+type SortId = "value" | "return" | "name";
+
+const SORTS: { id: SortId; label: string }[] = [
+  { id: "value", label: "VALUE" },
+  { id: "return", label: "RETURN" },
+  { id: "name", label: "A–Z" },
+];
+
 export function OverviewScreen() {
   const netWorth = useNetWorth();
-  const { transactions, profile, alerts } = useVesper();
+  const { transactions, profile, alerts, snapshots, lastSeenAt } = useVesper();
   const { setTab, openSheet } = useNavigation();
   const { isDesktop } = useResponsive();
   const series = usePortfolioSeries(RANGE);
@@ -65,6 +74,32 @@ export function OverviewScreen() {
   const balance = usdParts(netWorth.totalUsd);
   const empty = netWorth.valued.length === 0;
   const say = useMemo(() => headline(netWorth, alerts), [netWorth, alerts]);
+
+  /**
+   * The book, ordered the way you asked.
+   *
+   * Value first by default, because that is what a book of accounts is
+   * usually read for. Return answers a different question — what is
+   * working — and name is for when you already know what you are
+   * looking for and just want to find it.
+   */
+  const [sort, setSort] = useState<SortId>("value");
+  const sorted = useMemo(() => {
+    const rows = [...netWorth.valued];
+    if (sort === "name") {
+      return rows.sort((a, b) => a.asset.label.localeCompare(b.asset.label));
+    }
+    if (sort === "return") {
+      // Positions with no basis have no return to rank, so they sink
+      // rather than sorting as if they were flat.
+      return rows.sort((a, b) => (b.gainPct ?? -Infinity) - (a.gainPct ?? -Infinity));
+    }
+    return rows.sort((a, b) => b.valueUsd - a.valueUsd);
+  }, [netWorth.valued, sort]);
+  const welcomeBack = useMemo(
+    () => sinceLastVisit(snapshots, netWorth.totalUsd, lastSeenAt),
+    [snapshots, netWorth.totalUsd, lastSeenAt],
+  );
 
   if (empty) {
     return (
@@ -161,7 +196,13 @@ export function OverviewScreen() {
             ]}
           />
           <View style={{ flex: 1 }}>
-            <Txt variant="h2">{say.lead}</Txt>
+            {/* Only a returning visitor gets this, and only after a
+                real gap. It leads, because it is the one thing they
+                could not have known already. */}
+            {welcomeBack ? <Txt variant="h2">{welcomeBack}</Txt> : null}
+            <Txt variant={welcomeBack ? "body" : "h2"} tone={welcomeBack ? "textSecondary" : "text"}>
+              {say.lead}
+            </Txt>
             {say.detail ? (
               <Txt variant="body" tone="textSecondary">
                 {say.detail}
@@ -262,12 +303,30 @@ export function OverviewScreen() {
         <Column flex={1}>
           <Pane
             flex={1.2}
-            title={`Book · ${netWorth.valued.length} positions`}
+            title={`Book · ${plural(netWorth.valued.length, "position")}`}
             scroll={isDesktop}
             flush
-            action={<PriceSourceNote compact />}
+            action={
+              <View style={styles.sorts}>
+                {SORTS.map((option) => (
+                  <Tap
+                    key={option.id}
+                    onPress={() => setSort(option.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: sort === option.id }}
+                    accessibilityLabel={`Sort by ${option.label}`}
+                  >
+                    <View style={[styles.sort, sort === option.id && styles.sortOn]}>
+                      <Txt variant="micro" tone={sort === option.id ? "accentInk" : "textMuted"}>
+                        {option.label}
+                      </Txt>
+                    </View>
+                  </Tap>
+                ))}
+              </View>
+            }
           >
-            {netWorth.valued.map((entry, index) => (
+            {sorted.map((entry, index) => (
               <View key={entry.asset.id}>
                 {index > 0 && <Divider />}
                 <PositionRow entry={entry} />
@@ -275,7 +334,12 @@ export function OverviewScreen() {
             ))}
           </Pane>
 
-          <Pane flex={1} title="Signal" minHeight={isDesktop ? undefined : 260}>
+          <Pane
+            flex={1}
+            title="Signal"
+            minHeight={isDesktop ? undefined : 260}
+            action={<PriceSourceNote compact />}
+          >
             {largest && isDeFi(largest.asset) ? (
               <TokenPanel entry={largest} />
             ) : (
@@ -584,6 +648,19 @@ function bucketsOf(netWorth: ReturnType<typeof useNetWorth>) {
 }
 
 const styles = StyleSheet.create({
+  sorts: {
+    flexDirection: "row",
+    gap: space.xxs,
+  },
+  sort: {
+    paddingHorizontal: space.xs,
+    paddingVertical: 2,
+    borderRadius: radius.xs,
+    backgroundColor: color.well,
+  },
+  sortOn: {
+    backgroundColor: color.accent,
+  },
   headRight: {
     flexDirection: "row",
     alignItems: "center",

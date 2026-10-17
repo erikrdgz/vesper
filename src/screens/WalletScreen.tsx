@@ -53,8 +53,10 @@ export function WalletScreen() {
     realisedUsd,
     replaceAssets,
     logActivity,
+    captureBook,
+    restoreBook,
   } = useVesper();
-  const { toast } = useToast();
+  const { toast, toastUndo } = useToast();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
   const { openSheet, setTab, openAsset } = useNavigation();
@@ -301,7 +303,8 @@ export function WalletScreen() {
               <>
                 <Txt variant="caption" tone="negative">
                   Replace your {plural(assets.length, "position")} with the{" "}
-                  {plural(pendingImport.assets.length, "position")} in that file? There is no undo.
+                  {plural(pendingImport.assets.length, "position")} in that file? You will get a
+                  few seconds to undo it.
                 </Txt>
                 {pendingImport.skipped.length > 0 && (
                   <Txt variant="caption" tone="textMuted">
@@ -313,15 +316,16 @@ export function WalletScreen() {
                   label="Replace the book"
                   variant="primary"
                   onPress={() => {
+                    const before = captureBook();
                     replaceAssets(pendingImport.assets);
                     logActivity(
                       "edit",
                       `Imported ${plural(pendingImport.assets.length, "position")} from a file`,
                     );
-                    toast(
+                    toastUndo(
                       "Book replaced",
                       `${plural(pendingImport.assets.length, "position")} imported`,
-                      "positive",
+                      () => restoreBook(before),
                     );
                     setPendingImport(null);
                   }}
@@ -359,13 +363,18 @@ export function WalletScreen() {
             {confirmingReset ? (
               <>
                 <Txt variant="caption" tone="negative">
-                  This discards every edit you have made. There is no undo.
+                  This discards every edit you have made. You will get a few seconds to undo it,
+                  and after that it is gone.
                 </Txt>
                 <Action
                   label="Yes, reset everything"
                   variant="primary"
                   onPress={() => {
+                    const before = captureBook();
                     void resetToSeed();
+                    toastUndo("Reset to the seeded book", "Every edit was discarded.", () =>
+                      restoreBook(before),
+                    );
                     setConfirmingReset(false);
                   }}
                 />

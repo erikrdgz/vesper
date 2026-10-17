@@ -197,3 +197,44 @@ export function observations(netWorth: NetWorth, realisedUsd = 0): Observation[]
 
   return out;
 }
+
+/**
+ * What has changed since the last visit.
+ *
+ * The one thing only a returning visitor can be told, and the only
+ * genuine use the daily snapshots have. It needs a real gap — a
+ * "since you were last here" that covers the last four minutes is
+ * noise dressed as insight — and a snapshot to compare against, so it
+ * says nothing at all on a first or second visit.
+ */
+export function sinceLastVisit(
+  snapshots: { d: string; v: number }[],
+  totalUsd: number,
+  lastSeenAt: number | null,
+  now = Date.now(),
+): string | null {
+  if (lastSeenAt === null || snapshots.length === 0) return null;
+
+  const hours = (now - lastSeenAt) / 3_600_000;
+  // Under eight hours this is the same session or the same morning.
+  if (hours < 8) return null;
+
+  // Compare against the last snapshot written before they left, not
+  // the first one ever: "since you were last here" means since then.
+  const before = snapshots.filter((snapshot) => {
+    const taken = new Date(`${snapshot.d}T12:00:00`).getTime();
+    return taken <= lastSeenAt;
+  });
+  const mark = before[before.length - 1] ?? snapshots[0];
+  if (!mark) return null;
+
+  const change = totalUsd - mark.v;
+  const when =
+    hours < 36 ? "yesterday" : hours < 24 * 8 ? `${Math.round(hours / 24)} days ago` : "last time";
+
+  if (Math.abs(change) < Math.max(1, mark.v * 0.001)) {
+    return `Much the same as ${when}.`;
+  }
+
+  return `${change >= 0 ? "Up" : "Down"} ${usd(Math.abs(change))} since ${when}.`;
+}

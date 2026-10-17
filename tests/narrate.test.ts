@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { computeNetWorth } from "../src/lib/netWorth";
-import { headline, observations } from "../src/lib/narrate";
+import { headline, observations, sinceLastVisit } from "../src/lib/narrate";
 import type { Asset, PriceAlert, QuoteMap } from "../src/types";
 
 const flatQuotes: QuoteMap = {
@@ -153,4 +153,48 @@ test("realised gain is reported with its sign intact", () => {
   const body = down.find((o) => o.title === "Realised")?.body ?? "";
   assert.match(body, /−|-/);
   assert.equal(down.find((o) => o.title === "Realised")?.tone, "down");
+});
+
+test("nothing is said about a last visit on a first one", () => {
+  assert.equal(sinceLastVisit([{ d: "2026-10-16", v: 100 }], 120, null), null);
+});
+
+test("a gap of a few minutes is not a last visit", () => {
+  const now = Date.now();
+  assert.equal(
+    sinceLastVisit([{ d: "2026-10-16", v: 100 }], 120, now - 1000 * 60 * 20, now),
+    null,
+  );
+});
+
+test("a real gap is reported against the snapshot from before they left", () => {
+  const now = new Date("2026-10-18T09:00:00").getTime();
+  const lastSeen = new Date("2026-10-16T18:00:00").getTime();
+  const result = sinceLastVisit(
+    [
+      { d: "2026-10-15", v: 100 },
+      { d: "2026-10-16", v: 200 },
+      // Written after they left; must not be used as the mark.
+      { d: "2026-10-17", v: 900 },
+    ],
+    260,
+    lastSeen,
+    now,
+  );
+  // 260 against the 2026-10-16 mark of 200, not against 900.
+  assert.match(result ?? "", /Up \$60/);
+});
+
+test("a move inside the noise floor reads as much the same", () => {
+  const now = new Date("2026-10-18T09:00:00").getTime();
+  const lastSeen = new Date("2026-10-16T18:00:00").getTime();
+  const result = sinceLastVisit([{ d: "2026-10-16", v: 100_000 }], 100_050, lastSeen, now);
+  assert.match(result ?? "", /much the same/i);
+});
+
+test("a fall since the last visit is reported as a fall", () => {
+  const now = new Date("2026-10-18T09:00:00").getTime();
+  const lastSeen = new Date("2026-10-16T18:00:00").getTime();
+  const result = sinceLastVisit([{ d: "2026-10-16", v: 200 }], 150, lastSeen, now);
+  assert.match(result ?? "", /^Down /);
 });

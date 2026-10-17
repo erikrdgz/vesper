@@ -43,6 +43,15 @@ import {
   type Transaction,
 } from "../types";
 
+/** The restorable slice of the book. See `captureBook`. */
+export interface UndoableBook {
+  assets: Asset[];
+  transactions: Transaction[];
+  watchlist: string[];
+  activity: ActivityEntry[];
+  realisedUsd: number;
+}
+
 interface State {
   hydrated: boolean;
   assets: Asset[];
@@ -58,6 +67,14 @@ interface State {
   snapshots: Snapshot[];
   /** Whether the welcome has been through once. */
   onboarded: boolean;
+  /**
+   * When they were last here, read once at hydration and then frozen.
+   *
+   * Frozen deliberately: the stored value is overwritten with "now" as
+   * soon as the app loads, so anything reading it live would see the
+   * current visit and report nothing. This is the value from before.
+   */
+  lastSeenAt: number | null;
   prices: PriceState;
   /** null means "follow the OS". */
   reduceMotionOverride: boolean | null;
@@ -76,6 +93,7 @@ type Action =
       realisedUsd: number;
       snapshots: Snapshot[];
       onboarded: boolean;
+      lastSeenAt: number | null;
       quotes: QuoteMap | null;
       fetchedAt: number | null;
       reduceMotion: boolean | null;
@@ -92,6 +110,7 @@ type Action =
   | { type: "realised/add"; amountUsd: number }
   | { type: "profile/set"; patch: Partial<Profile> }
   | { type: "snapshot/record"; snapshots: Snapshot[] }
+  | { type: "book/restore"; book: UndoableBook }
   | { type: "onboard/finish"; name: string; startEmpty: boolean }
   | { type: "alert/add"; alert: PriceAlert }
   | { type: "alert/remove"; id: string }
@@ -112,6 +131,7 @@ const initialState: State = {
   realisedUsd: 0,
   snapshots: [],
   onboarded: false,
+  lastSeenAt: null,
   prices: {
     quotes: fallbackQuotes,
     source: "fallback",
@@ -139,6 +159,7 @@ function reducer(state: State, action: Action): State {
         realisedUsd: action.realisedUsd,
         snapshots: action.snapshots,
         onboarded: action.onboarded,
+        lastSeenAt: action.lastSeenAt,
         reduceMotionOverride: action.reduceMotion,
         prices: hasCache
           ? {
@@ -215,6 +236,9 @@ function reducer(state: State, action: Action): State {
 
     case "snapshot/record":
       return { ...state, snapshots: action.snapshots };
+
+    case "book/restore":
+      return { ...state, ...action.book };
 
     case "onboard/finish": {
       const name = action.name.trim();
@@ -294,6 +318,16 @@ interface VesperContextValue extends State {
   finishOnboarding: (name: string, startEmpty: boolean) => void;
   /** Swap the whole book out, for a CSV import. */
   replaceAssets: (assets: Asset[]) => void;
+  /**
+   * Everything a destructive action could destroy, as one value.
+   *
+   * Taken before the action, held in the undo closure, and handed back
+   * to `restoreBook` if the offer is accepted. Simpler than a global
+   * undo stack and it cannot go stale: the snapshot and the button
+   * that uses it live and die together.
+   */
+  captureBook: () => UndoableBook;
+  restoreBook: (book: UndoableBook) => void;
   setReduceMotion: (value: boolean | null) => void;
   resetToSeed: () => Promise<void>;
 }
@@ -322,6 +356,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
         realisedUsd: persisted?.realisedUsd ?? 0,
         snapshots: persisted?.snapshots ?? [],
         onboarded: persisted?.onboarded ?? false,
+        lastSeenAt: persisted?.lastSeenAt ?? null,
         transactions: persisted?.transactions ?? seedTransactions,
         watchlist: persisted?.watchlist?.length ? persisted.watchlist : seedWatchlist,
         quotes: persisted?.quotes ?? null,
@@ -349,6 +384,10 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       realisedUsd: state.realisedUsd,
       snapshots: state.snapshots,
       onboarded: state.onboarded,
+      // Always written as now, so the next visit can measure the gap.
+      // The in-memory value stays as it was read, which is what the
+      // "since you were last here" line compares against.
+      lastSeenAt: Date.now(),
       quotes: state.prices.source === "fallback" ? null : state.prices.quotes,
       quotesFetchedAt: state.prices.fetchedAt,
       reduceMotion: state.reduceMotionOverride,
@@ -584,6 +623,14 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       finishOnboarding: (name, startEmpty) =>
         dispatch({ type: "onboard/finish", name, startEmpty }),
       replaceAssets: (next) => dispatch({ type: "assets/replace", assets: next }),
+      captureBook: () => ({
+        assets: state.assets,
+        transactions: state.transactions,
+        watchlist: state.watchlist,
+        activity: state.activity,
+        realisedUsd: state.realisedUsd,
+      }),
+      restoreBook: (book) => dispatch({ type: "book/restore", book }),
       logActivity: (kind, summary) =>
         dispatch({
           type: "activity/log",

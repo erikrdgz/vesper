@@ -291,6 +291,13 @@ export interface PersistedState {
    * greeted you by his name, which is the least welcoming thing it did.
    */
   onboarded: boolean;
+  /**
+   * Epoch ms of the visit before this one.
+   *
+   * Written as "now" on every save, so the next load can measure the
+   * gap and say what changed while they were away.
+   */
+  lastSeenAt: number | null;
   /** Last good quote set, for the `cached` price source. */
   quotes: QuoteMap | null;
   quotesFetchedAt: number | null;

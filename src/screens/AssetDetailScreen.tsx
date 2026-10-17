@@ -34,9 +34,9 @@ import { TokenObject } from "../components/TokenObject";
 const RANGES = ["1H", "1D", "1W", "1M", "1Y"] as const satisfies readonly ChartRange[];
 
 export function AssetDetailScreen({ assetId }: { assetId: string }) {
-  const { assets, prices, updateAsset, removeAsset } = useVesper();
+  const { assets, prices, updateAsset, removeAsset, captureBook, restoreBook } = useVesper();
   const { closeAsset } = useNavigation();
-  const { toast } = useToast();
+  const { toast, toastUndo } = useToast();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
   const [range, setRange] = useState<ChartRange>("1D");
@@ -238,8 +238,11 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
               variant="quiet"
               icon={<TrashIcon size={16} tone={color.negative} />}
               onPress={() => {
+                const before = captureBook();
                 removeAsset(assetId);
-                toast(`${defi.label} removed`, "It is out of your book.");
+                toastUndo(`${defi.label} removed`, "It is out of your book.", () =>
+                  restoreBook(before),
+                );
                 closeAsset();
               }}
             />
