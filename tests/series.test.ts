@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { areaPath, project, smoothPath } from "../src/lib/chartPath";
+import { areaPath, estimatePathLength, project, smoothPath } from "../src/lib/chartPath";
 import { combineSeries, extent, resample, syntheticSeries, timeGrid } from "../src/lib/series";
 import type { SeriesPoint } from "../src/types";
 
@@ -121,4 +121,23 @@ test("a single point does not produce a malformed path", () => {
   const line = smoothPath([{ t: 1, v: 5 }], projection);
   assert.ok(!line.includes("NaN"));
   assert.ok(!line.includes("C"));
+});
+
+test("estimatePathLength is at least the straight-line distance", () => {
+  const points: SeriesPoint[] = [
+    { t: 1, v: 0 },
+    { t: 2, v: 10 },
+    { t: 3, v: 0 },
+  ];
+  const projection = project(points.length, { min: 0, max: 10 }, 100, 50);
+  const length = estimatePathLength(points, projection);
+
+  // Two legs of a 50-wide, 50-tall triangle, plus the curve allowance.
+  assert.ok(length > 140, `expected > 140, got ${length}`);
+  assert.ok(Number.isFinite(length));
+});
+
+test("estimatePathLength is zero for a series too short to draw", () => {
+  const projection = project(1, { min: 0, max: 1 }, 10, 10);
+  assert.equal(estimatePathLength([{ t: 1, v: 1 }], projection), 0);
 });

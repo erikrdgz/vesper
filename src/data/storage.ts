@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Asset, PersistedState, QuoteMap, Transaction } from "../types";
 
 const KEY = "vesper.state.v1";
+const CHART_KEY = "vesper.charts.v1";
 const WRITE_DEBOUNCE_MS = 400;
 
 /** How old a cached quote set can be before we stop trusting it at all. */
@@ -119,4 +120,53 @@ export async function clearState(): Promise<void> {
   } catch {
     // Nothing to do; the caller resets in-memory state regardless.
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Chart history cache                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Price history, cached across reloads.
+ *
+ * Kept under its own key and read separately from the book of accounts,
+ * because it is large, disposable, and must never be able to corrupt the
+ * balances by sharing a parse with them.
+ *
+ * This exists because CoinGecko's free tier rate-limits by IP, a cold load
+ * costs one request per holding, and without this every refresh paid that
+ * cost again until the limit cut in.
+ */
+export const CHART_CACHE_TTL_MS = 1000 * 60 * 60;
+
+type ChartCache = Record<string, { points: { t: number; v: number }[]; at: number }>;
+
+export async function loadChartCache(): Promise<ChartCache> {
+  try {
+    const raw = await AsyncStorage.getItem(CHART_KEY);
+    if (!raw) return {};
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+
+    const out: ChartCache = {};
+    for (const [key, entry] of Object.entries(parsed as ChartCache)) {
+      if (!entry || typeof entry.at !== "number" || !Array.isArray(entry.points)) continue;
+      if (Date.now() - entry.at > CHART_CACHE_TTL_MS) continue;
+      out[key] = entry;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+let chartTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function saveChartCache(cache: ChartCache): void {
+  if (chartTimer) clearTimeout(chartTimer);
+  chartTimer = setTimeout(() => {
+    chartTimer = null;
+    AsyncStorage.setItem(CHART_KEY, JSON.stringify(cache)).catch(() => {});
+  }, 1000);
 }

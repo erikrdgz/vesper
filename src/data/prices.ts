@@ -96,15 +96,44 @@ export async function fetchQuotes(ids: string[], signal?: AbortSignal): Promise<
 
     return quotes;
   } catch (error) {
-    if (error instanceof PriceError) throw error;
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new PriceError("Price request timed out");
-    }
-    throw new PriceError("Could not reach CoinGecko");
+    throw asPriceError(error, "prices");
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onOuterAbort);
   }
+}
+
+/**
+ * Work out what actually went wrong, given that we are often not allowed
+ * to know.
+ *
+ * CoinGecko's 429 is served without `Access-Control-Allow-Origin`, so a
+ * browser rejects it before JavaScript can read the status. The rate-limit
+ * branch in the `response.status === 429` check above therefore never fires
+ * on the web — it only ever runs in a native build, where there is no CORS.
+ *
+ * What the web gets instead is a bare `TypeError` that is
+ * indistinguishable from being offline. Rather than guess confidently, the
+ * message says what we know and what we suspect, and leaves it there.
+ */
+function asPriceError(error: unknown, what: string): PriceError {
+  if (error instanceof PriceError) return error;
+
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return new PriceError(`The ${what} request timed out.`);
+  }
+
+  // A TypeError from fetch means the request never completed: offline,
+  // DNS, or a blocked cross-origin response such as CoinGecko's 429.
+  if (error instanceof TypeError) {
+    return new PriceError(
+      "CoinGecko did not answer. Most likely its free-tier rate limit, which is shared by " +
+        "everyone on your network and tells us nothing more than this.",
+      true,
+    );
+  }
+
+  return new PriceError(`Could not load ${what}.`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -194,11 +223,7 @@ export async function fetchMarketChart(
 
     return points;
   } catch (error) {
-    if (error instanceof PriceError) throw error;
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new PriceError("History request timed out");
-    }
-    throw new PriceError("Could not reach CoinGecko");
+    throw asPriceError(error, "history");
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onOuterAbort);

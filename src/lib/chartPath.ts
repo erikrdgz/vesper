@@ -70,3 +70,26 @@ export function areaPath(line: string, width: number, height: number): string {
   if (!line) return "";
   return `${line} L ${width.toFixed(2)} ${height.toFixed(2)} L 0 ${height.toFixed(2)} Z`;
 }
+
+/**
+ * An estimate of the drawn path's length, for the draw-on animation.
+ *
+ * `getTotalLength()` exists in the DOM but not in react-native-svg's native
+ * backends, so this walks the polyline and adds a small allowance for the
+ * curve bowing outside its chord. It only has to be close: the number
+ * feeds a `strokeDasharray`, and being a few percent long means the line
+ * finishes drawing a few milliseconds early.
+ */
+export function estimatePathLength(points: SeriesPoint[], projection: Projection): number {
+  if (points.length < 2) return 0;
+
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const dx = projection.x(i) - projection.x(i - 1);
+    const dy = projection.y(points[i]!.v) - projection.y(points[i - 1]!.v);
+    total += Math.hypot(dx, dy);
+  }
+
+  // Catmull-Rom at this tension bows roughly 6% outside the chord.
+  return total * 1.06;
+}

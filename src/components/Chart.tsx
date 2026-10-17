@@ -13,7 +13,7 @@
 
 import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
-import Svg, { Circle, Defs, LinearGradient, Line, Path, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Stop } from "react-native-svg";
 
 import { areaPath, project, smoothPath } from "../lib/chartPath";
 import { extent } from "../lib/series";
@@ -148,14 +148,9 @@ export function Sparkline({
 
   return (
     <Svg width={width} height={height}>
-      <Path
-        d={line}
-        stroke={tone}
-        strokeWidth={1.75}
-        fill="none"
-        strokeLinecap="round"
-        translateY={2}
-      />
+      <G y={2}>
+        <Path d={line} stroke={tone} strokeWidth={1.75} fill="none" strokeLinecap="round" />
+      </G>
     </Svg>
   );
 }

@@ -305,6 +305,25 @@ export const duration = {
 /** How far a revealing element travels, in points. */
 export const rise = 30;
 
+/**
+ * Spring configurations, for anything a hand drives.
+ *
+ * The four curves above are fixed-duration, which is right for a reveal:
+ * it is choreography, and choreography has a running time. It is wrong for
+ * a cursor-tracked tilt or a press, which should feel attached to the
+ * input rather than scheduled after it. Those get springs.
+ */
+export const spring = {
+  /** Presses and hovers. Fast, no visible overshoot. */
+  press: { tension: 320, friction: 26 },
+  /** Cursor tracking. Loose enough to lag slightly, which reads as weight. */
+  track: { tension: 120, friction: 18 },
+  /** The 3D flip. Deliberate overshoot; it is the one place that earns it. */
+  flip: { tension: 180, friction: 14 },
+  /** Digit rolls on a changing balance. */
+  digit: { tension: 200, friction: 22 },
+} as const;
+
 /** Delay between items in a staggered group, and the cap on that delay. */
 export const stagger = { step: 70, cap: 6 } as const;
 
@@ -325,6 +344,7 @@ export const theme = {
   layout,
   ease,
   duration,
+  spring,
   rise,
   stagger,
   staggerDelay,
