@@ -19,6 +19,7 @@ import { useVesper } from "../hooks/useVesper";
 import { areaPath, estimatePathLength, project, smoothPath } from "../lib/chartPath";
 import { extent } from "../lib/series";
 import { color, duration, radius, space, type } from "../theme";
+import { chartTime, usd } from "../lib/format";
 import type { SeriesPoint } from "../types";
 import { Txt } from "./primitives";
 
@@ -36,6 +37,10 @@ interface AreaChartProps {
   dimmed?: boolean;
   /** Draws the line on from left to right when the data first arrives. */
   animate?: boolean;
+  /** Scrubbing: a vertical rule and a readout follow the pointer. */
+  crosshair?: boolean;
+  /** Which range the points cover, so the readout's timestamp fits it. */
+  range?: string;
 }
 
 
@@ -92,7 +97,10 @@ export function AreaChart({
   marker = true,
   dimmed,
   animate = true,
+  crosshair,
+  range = "1D",
 }: AreaChartProps) {
+  const [hover, setHover] = useState<number | null>(null);
   const geometry = useMemo(() => {
     if (points.length < 2 || width <= 0 || height <= 0) return null;
 
@@ -117,6 +125,20 @@ export function AreaChart({
     return <View style={{ width, height }} />;
   }
 
+  /**
+   * Nearest sample to the pointer.
+   *
+   * Snapping to a real sample rather than interpolating matters: an
+   * interpolated readout shows a price that never printed, which is the
+   * one thing a price readout must not do.
+   */
+  const hovered =
+    hover !== null && hover >= 0 && hover < points.length ? points[hover]! : null;
+  const hoverX = hovered ? (hover! / Math.max(1, points.length - 1)) * width : 0;
+  const hoverY = hovered
+    ? project(points.length, extent(points), width, height).y(hovered.v)
+    : 0;
+
   const drawing = progress < 1;
   const reveal = {
     dash: drawing
@@ -134,8 +156,25 @@ export function AreaChart({
   // would have the second silently adopt the first's colours.
   const fillId = `area-${tone.replace(/[^a-z0-9]/gi, "")}-${Math.round(width)}`;
 
+  const onMove = (event: {
+    nativeEvent: { offsetX?: number; locationX?: number };
+  }) => {
+    const x = event.nativeEvent.offsetX ?? event.nativeEvent.locationX;
+    if (x === undefined || width <= 0) return;
+    const ratio = Math.min(1, Math.max(0, x / width));
+    setHover(Math.round(ratio * (points.length - 1)));
+  };
+
   return (
-    <View style={{ width, height, opacity: dimmed ? 0.45 : 1 }}>
+    <View
+      style={{ width, height, opacity: dimmed ? 0.45 : 1 }}
+      {...(crosshair
+        ? {
+            onPointerMove: onMove,
+            onPointerLeave: () => setHover(null),
+          }
+        : null)}
+    >
       <Svg width={width} height={height}>
         <Defs>
           <LinearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
@@ -192,7 +231,29 @@ export function AreaChart({
           {...reveal.dash}
         />
 
-        {marker && reveal.markerVisible && (
+        {hovered && (
+          <>
+            <Line
+              x1={hoverX}
+              y1={0}
+              x2={hoverX}
+              y2={height}
+              stroke={color.hairlineStrong}
+              strokeWidth={1}
+            />
+            <Circle cx={hoverX} cy={hoverY} r={8} fill={tone} opacity={0.2} />
+            <Circle
+              cx={hoverX}
+              cy={hoverY}
+              r={4}
+              fill={tone}
+              stroke={color.ground}
+              strokeWidth={2}
+            />
+          </>
+        )}
+
+        {marker && !hovered && reveal.markerVisible && (
           <>
             <Circle cx={geometry.lastX} cy={geometry.lastY} r={7} fill={tone} opacity={0.18} />
             <Circle
@@ -206,6 +267,25 @@ export function AreaChart({
           </>
         )}
       </Svg>
+
+      {hovered && (
+        <View
+          // Flips to the left of the rule near the right edge, so the
+          // readout never runs off the pane it is drawn in.
+          style={[
+            styles.readout,
+            hoverX > width - 132 ? { right: width - hoverX + 10 } : { left: hoverX + 10 },
+          ]}
+          pointerEvents="none"
+        >
+          <Txt variant="mono" tone="text">
+            {usd(hovered.v)}
+          </Txt>
+          <Txt variant="micro" tone="textMuted">
+            {chartTime(hovered.t, range)}
+          </Txt>
+        </View>
+      )}
     </View>
   );
 }
@@ -337,6 +417,17 @@ export function BarRow({
 }
 
 const styles = StyleSheet.create({
+  readout: {
+    position: "absolute",
+    top: space.xs,
+    paddingHorizontal: space.xs,
+    paddingVertical: space.xxs,
+    borderRadius: radius.xs,
+    backgroundColor: color.groundRaised,
+    borderWidth: 1,
+    borderColor: color.hairline,
+    gap: 1,
+  },
   allocationTrack: {
     flexDirection: "row",
     height: 10,

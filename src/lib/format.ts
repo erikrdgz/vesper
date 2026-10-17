@@ -108,3 +108,22 @@ export function relativeTime(epochMs: number | null): string {
   if (hours < 24) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
 }
+
+/**
+ * The timestamp under a crosshair.
+ *
+ * Shows the detail the range justifies: a point on a one-hour chart needs
+ * its minute, a point on a one-year chart does not, and printing seconds
+ * on either would just be noise that changes as you scrub.
+ */
+export function chartTime(epochMs: number, range: string): string {
+  const date = new Date(epochMs);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const day = date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+  if (range === "1H" || range === "1D") return time;
+  if (range === "1Y") return date.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  return `${day}, ${time}`;
+}

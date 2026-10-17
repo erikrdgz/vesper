@@ -130,6 +130,8 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
                   height={chart.height}
                   tone={tone}
                   dimmed={series.loading && series.points.length === 0}
+                  crosshair
+                  range={range}
                 />
               )}
             </View>

@@ -162,6 +162,8 @@ function ChartFill({ points, loading }: { points: { t: number; v: number }[]; lo
           width={measured.width}
           height={measured.height}
           dimmed={loading && points.length === 0}
+          crosshair
+          range={RANGE}
         />
       )}
     </View>

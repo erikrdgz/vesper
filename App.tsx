@@ -6,6 +6,7 @@
  * the responsive contract in `src/components/AppShell`.
  */
 
+import { useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 
@@ -14,6 +15,7 @@ import { AddAssetSheet, SendSheet } from "./src/components/sheets";
 import { NavigationProvider, useNavigation } from "./src/hooks/useNavigation";
 import { VesperProvider } from "./src/hooks/useVesper";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
+import { IntroScreen } from "./src/screens/IntroScreen";
 import { AssetDetailScreen } from "./src/screens/AssetDetailScreen";
 import { CryptoScreen } from "./src/screens/CryptoScreen";
 import { OverviewScreen } from "./src/screens/OverviewScreen";
@@ -40,18 +42,40 @@ function Router() {
   }
 }
 
-export default function App() {
+/**
+ * The intro sits inside the providers, not outside them.
+ *
+ * It needs the reduced-motion preference, and the app behind it gets to
+ * hydrate and fetch its first prices while the animation plays — so by
+ * the time someone clicks through, the dashboard is already warm instead
+ * of starting from nothing.
+ */
+function Gate() {
+  const [entered, setEntered] = useState(false);
+
   return (
-    <VesperProvider>
-      <NavigationProvider>
-        <View style={styles.root}>
-          <StatusBar style="light" />
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      {entered ? (
+        <>
           <AppShell>
             <Router />
           </AppShell>
           <AddAssetSheet />
           <SendSheet />
-        </View>
+        </>
+      ) : (
+        <IntroScreen onEnter={() => setEntered(true)} />
+      )}
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <VesperProvider>
+      <NavigationProvider>
+        <Gate />
       </NavigationProvider>
     </VesperProvider>
   );

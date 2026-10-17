@@ -208,6 +208,8 @@ function SelectedDetail({ entry }: { entry: ValuedAsset }) {
             tone={tone}
             gridLines={0}
             marker={false}
+            crosshair
+            range="1W"
           />
         )}
       </View>

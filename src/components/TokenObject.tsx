@@ -154,16 +154,27 @@ interface TokenObjectProps {
   /** Changes whenever the selection changes, to trigger the flip. */
   flipIndex: number;
   height?: number;
+  /**
+   * How far back the camera sits. The outer ring has a radius of 2.25, so
+   * a short canvas clips it unless the camera pulls back — which is what
+   * the intro, at 260px tall and showing the object at full size, needs.
+   */
+  distance?: number;
 }
 
-export function TokenObject({ symbol, flipIndex, height = 220 }: TokenObjectProps) {
+export function TokenObject({
+  symbol,
+  flipIndex,
+  height = 220,
+  distance = 5.6,
+}: TokenObjectProps) {
   const { reduceMotion } = useVesper();
   const tone = tokenColor(symbol);
 
   return (
     <View style={[styles.root, { height }]} pointerEvents="box-none">
       <Canvas
-        camera={{ position: [0, 0, 5.6], fov: 48 }}
+        camera={{ position: [0, 0, distance], fov: 48 }}
         // Clear to the card surface rather than transparent: an alpha
         // canvas composited over a glow costs a full-screen blend on every
         // frame for a difference nobody can see.

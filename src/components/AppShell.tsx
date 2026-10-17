@@ -28,7 +28,7 @@ import {
   SettingsIcon,
   type IconProps,
 } from "./icons";
-import { CommandBar, Grid, Ticker } from "./terminal";
+import { CommandBar, Grid, Watchlist } from "./terminal";
 import { Txt } from "./primitives";
 
 const TABS: { id: TabId; label: string; Icon: (props: IconProps) => React.ReactElement }[] = [
@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <View style={styles.root}>
         <CommandBar />
-        <Ticker />
+        <Watchlist />
         <View style={styles.desktopBody}>{children}</View>
       </View>
     );
@@ -173,7 +173,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <View style={styles.root}>
-      <Ticker />
+      <Watchlist />
       {children}
       <TabBar />
     </View>

@@ -175,6 +175,8 @@ export interface PersistedState {
   assets: Asset[];
   /** Seeded, plus anything added through the send sheet. */
   transactions: Transaction[];
+  /** CoinGecko ids being followed, held or not. */
+  watchlist: string[];
   /** Last good quote set, for the `cached` price source. */
   quotes: QuoteMap | null;
   quotesFetchedAt: number | null;

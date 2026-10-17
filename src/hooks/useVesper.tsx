@@ -24,6 +24,7 @@ import React, {
 import { AccessibilityInfo } from "react-native";
 
 import { AUTO_REFRESH_MS, MIN_REFRESH_MS, PriceError, fetchQuotes } from "../data/prices";
+import { seedWatchlist } from "../data/catalog";
 import { fallbackQuotes, seedAssets, seedTransactions } from "../data/seed";
 import { clearState, loadState, saveState } from "../data/storage";
 import { isDeFi, type Asset, type PriceState, type QuoteMap, type Transaction } from "../types";
@@ -32,6 +33,8 @@ interface State {
   hydrated: boolean;
   assets: Asset[];
   transactions: Transaction[];
+  /** CoinGecko ids being followed, held or not. */
+  watchlist: string[];
   prices: PriceState;
   /** null means "follow the OS". */
   reduceMotionOverride: boolean | null;
@@ -39,7 +42,15 @@ interface State {
 }
 
 type Action =
-  | { type: "hydrated"; assets: Asset[]; transactions: Transaction[]; quotes: QuoteMap | null; fetchedAt: number | null; reduceMotion: boolean | null }
+  | {
+      type: "hydrated";
+      assets: Asset[];
+      transactions: Transaction[];
+      watchlist: string[];
+      quotes: QuoteMap | null;
+      fetchedAt: number | null;
+      reduceMotion: boolean | null;
+    }
   | { type: "prices/loading" }
   | { type: "prices/ok"; quotes: QuoteMap; fetchedAt: number }
   | { type: "prices/failed"; message: string }
@@ -47,6 +58,7 @@ type Action =
   | { type: "asset/update"; id: string; patch: Partial<Asset> }
   | { type: "asset/remove"; id: string }
   | { type: "transaction/add"; transaction: Transaction }
+  | { type: "watch/toggle"; coingeckoId: string }
   | { type: "reduceMotion/set"; value: boolean | null }
   | { type: "systemReduceMotion"; value: boolean }
   | { type: "reset" };
@@ -55,6 +67,7 @@ const initialState: State = {
   hydrated: false,
   assets: seedAssets,
   transactions: seedTransactions,
+  watchlist: seedWatchlist,
   prices: {
     quotes: fallbackQuotes,
     source: "fallback",
@@ -75,6 +88,7 @@ function reducer(state: State, action: Action): State {
         hydrated: true,
         assets: action.assets,
         transactions: action.transactions,
+        watchlist: action.watchlist,
         reduceMotionOverride: action.reduceMotion,
         prices: hasCache
           ? {
@@ -127,6 +141,14 @@ function reducer(state: State, action: Action): State {
     case "transaction/add":
       return { ...state, transactions: [action.transaction, ...state.transactions] };
 
+    case "watch/toggle":
+      return {
+        ...state,
+        watchlist: state.watchlist.includes(action.coingeckoId)
+          ? state.watchlist.filter((id) => id !== action.coingeckoId)
+          : [...state.watchlist, action.coingeckoId],
+      };
+
     case "reduceMotion/set":
       return { ...state, reduceMotionOverride: action.value };
 
@@ -149,6 +171,7 @@ interface VesperContextValue extends State {
   updateAsset: (id: string, patch: Partial<Asset>) => void;
   removeAsset: (id: string) => void;
   addTransaction: (transaction: Transaction) => void;
+  toggleWatch: (coingeckoId: string) => void;
   setReduceMotion: (value: boolean | null) => void;
   resetToSeed: () => Promise<void>;
 }
@@ -172,6 +195,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
         type: "hydrated",
         assets: persisted?.assets ?? seedAssets,
         transactions: persisted?.transactions ?? seedTransactions,
+        watchlist: persisted?.watchlist?.length ? persisted.watchlist : seedWatchlist,
         quotes: persisted?.quotes ?? null,
         fetchedAt: persisted?.quotesFetchedAt ?? null,
         reduceMotion: persisted?.reduceMotion ?? null,
@@ -190,6 +214,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       version: 1,
       assets: state.assets,
       transactions: state.transactions,
+      watchlist: state.watchlist,
       quotes: state.prices.source === "fallback" ? null : state.prices.quotes,
       quotesFetchedAt: state.prices.fetchedAt,
       reduceMotion: state.reduceMotionOverride,
@@ -198,6 +223,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
     state.hydrated,
     state.assets,
     state.transactions,
+    state.watchlist,
     state.prices.quotes,
     state.prices.source,
     state.prices.fetchedAt,
@@ -206,9 +232,22 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
 
   /* --- prices ------------------------------------------------------ */
 
+  /**
+   * Every id that needs a price: holdings and watchlist together.
+   *
+   * CoinGecko charges by request, not by id, so folding the watchlist
+   * into the same `/simple/price` call makes following six extra tokens
+   * free rather than six more chances to trip the rate limit.
+   */
   const coingeckoIds = useMemo(
-    () => state.assets.filter(isDeFi).map((asset) => asset.coingeckoId),
-    [state.assets],
+    () =>
+      Array.from(
+        new Set([
+          ...state.assets.filter(isDeFi).map((asset) => asset.coingeckoId),
+          ...state.watchlist,
+        ]),
+      ),
+    [state.assets, state.watchlist],
   );
 
   const refreshPrices = useCallback(
@@ -285,6 +324,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       updateAsset: (id, patch) => dispatch({ type: "asset/update", id, patch }),
       removeAsset: (id) => dispatch({ type: "asset/remove", id }),
       addTransaction: (transaction) => dispatch({ type: "transaction/add", transaction }),
+      toggleWatch: (coingeckoId) => dispatch({ type: "watch/toggle", coingeckoId }),
       setReduceMotion: (v) => dispatch({ type: "reduceMotion/set", value: v }),
       resetToSeed: async () => {
         await clearState();

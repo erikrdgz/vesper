@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { useNetWorth } from "../hooks/useNetWorth";
 import { useResponsive } from "../hooks/useResponsive";
@@ -15,7 +15,9 @@ import { useVesper } from "../hooks/useVesper";
 import { relativeTime, usd } from "../lib/format";
 import { color, radius, space } from "../theme";
 import { isDeFi } from "../types";
+import { TOKEN_CATALOG } from "../data/catalog";
 import { Column, Row, Screen } from "../components/AppShell";
+import { CoinMark } from "../components/coins";
 import { ToggleRow } from "../components/Field";
 import { RefreshIcon, TrashIcon } from "../components/icons";
 import { Action, Divider, Txt } from "../components/primitives";
@@ -32,6 +34,8 @@ export function SettingsScreen() {
     systemReduceMotion,
     setReduceMotion,
     resetToSeed,
+    watchlist,
+    toggleWatch,
   } = useVesper();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
@@ -66,6 +70,33 @@ export function SettingsScreen() {
               Built with React Native primitives and compiled to the web by Expo. The same
               components would run on a phone.
             </Txt>
+          </Pane>
+
+          <Pane title="Watchlist">
+            <Txt variant="caption" tone="textSecondary">
+              What appears in the bar across the top. Following a token costs nothing extra —
+              every price on screen comes from one request.
+            </Txt>
+            <View style={styles.chips}>
+              {TOKEN_CATALOG.map((entry) => {
+                const on = watchlist.includes(entry.coingeckoId);
+                return (
+                  <Pressable
+                    key={entry.coingeckoId}
+                    onPress={() => toggleWatch(entry.coingeckoId)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    accessibilityLabel={`Follow ${entry.label}`}
+                    style={[styles.chip, on && styles.chipOn]}
+                  >
+                    <CoinMark symbol={entry.symbol} size={16} />
+                    <Txt variant="micro" tone={on ? "accentInk" : "textSecondary"}>
+                      {entry.symbol}
+                    </Txt>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Pane>
 
           <Pane title="Motion">
@@ -166,5 +197,25 @@ const styles = StyleSheet.create({
   },
   tileAccent: {
     backgroundColor: color.accent,
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: space.xs,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.xxs,
+    paddingHorizontal: space.xs,
+    paddingVertical: space.xxs,
+    borderRadius: radius.pill,
+    backgroundColor: color.well,
+    borderWidth: 1,
+    borderColor: color.hairline,
+  },
+  chipOn: {
+    backgroundColor: color.accent,
+    borderColor: color.accent,
   },
 });

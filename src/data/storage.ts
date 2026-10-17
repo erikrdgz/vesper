@@ -78,6 +78,11 @@ export async function loadState(): Promise<PersistedState | null> {
       // Transactions are cosmetic, so a bad list degrades to empty rather
       // than throwing the whole save away with the balances in it.
       transactions: isTransactionArray(candidate.transactions) ? candidate.transactions : [],
+      watchlist:
+        Array.isArray(candidate.watchlist) &&
+        candidate.watchlist.every((id) => typeof id === "string")
+          ? candidate.watchlist
+          : [],
       quotes: fresh ? ((candidate.quotes as QuoteMap | null) ?? null) : null,
       quotesFetchedAt: fresh ? fetchedAt : null,
       reduceMotion: typeof candidate.reduceMotion === "boolean" ? candidate.reduceMotion : null,

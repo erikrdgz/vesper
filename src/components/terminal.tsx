@@ -9,18 +9,30 @@
  * double rule or a gap behind it.
  */
 
-import React, { useEffect, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { useNavigation } from "../hooks/useNavigation";
 import { useResponsive } from "../hooks/useResponsive";
 import { useChangeFlash } from "../hooks/useInteraction";
+import { useNetWorth } from "../hooks/useNetWorth";
 import { useVesper } from "../hooks/useVesper";
 import { pct, usd } from "../lib/format";
-import { color, ease, nativeDriver, radius, space } from "../theme";
+import { catalogById, type CatalogEntry } from "../data/catalog";
+import { color, radius, space } from "../theme";
 import { isDeFi, type TabId } from "../types";
+import { Wordmark } from "./brand";
+import { CoinMark } from "./coins";
 import { PlusIcon } from "./icons";
-import { Txt } from "./primitives";
+import { Avatar, Tap, Txt } from "./primitives";
 
 /* ------------------------------------------------------------------ */
 /* Panes                                                               */
@@ -183,42 +195,141 @@ function RefreshRing() {
   );
 }
 
+function CommandTab({
+  id,
+  label,
+  active,
+  onPress,
+}: {
+  id: TabId;
+  label: string;
+  active: boolean;
+  onPress: (id: TabId) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <Pressable
+      onPress={() => onPress(id)}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      style={styles.commandTab}
+    >
+      <Txt variant="micro" tone={active ? "text" : hovered ? "textSecondary" : "textMuted"}>
+        {label}
+      </Txt>
+      {/* The underline is the selection, not a pill. A pill in a top bar
+          reads as a button and invites a second click. Hover gets a
+          dimmer rule so the target is obvious before you commit. */}
+      <View
+        style={[
+          styles.commandUnderline,
+          hovered && !active && styles.commandUnderlineHover,
+          active && styles.commandUnderlineActive,
+        ]}
+      />
+    </Pressable>
+  );
+}
+
+/**
+ * The profile popover.
+ *
+ * A Modal rather than an absolutely-positioned View, so a click anywhere
+ * outside dismisses it without a document-level listener that would
+ * never exist on a phone.
+ */
+function Profile() {
+  const [open, setOpen] = useState(false);
+  const { setTab } = useNavigation();
+  const { assets } = useVesper();
+  const netWorth = useNetWorth();
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Your profile"
+        style={styles.avatarButton}
+      >
+        <Avatar name="Leonard Lopez" size={28} />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => setOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close profile"
+        >
+          <View style={styles.scrim} />
+        </Pressable>
+
+        <View style={styles.popover}>
+          <View style={styles.popoverHead}>
+            <Avatar name="Leonard Lopez" size={40} />
+            <View style={{ flex: 1 }}>
+              <Txt variant="title">Leonard Lopez</Txt>
+              <Txt variant="caption" tone="textMuted">
+                @leonardlopez · Standard
+              </Txt>
+            </View>
+          </View>
+
+          <View style={styles.popoverStats}>
+            <View style={styles.popoverStat}>
+              <Txt variant="micro" tone="textMuted">
+                Net worth
+              </Txt>
+              <Txt variant="mono">{usd(netWorth.totalUsd)}</Txt>
+            </View>
+            <View style={styles.popoverStat}>
+              <Txt variant="micro" tone="textMuted">
+                Positions
+              </Txt>
+              <Txt variant="mono">{String(assets.length)}</Txt>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => {
+              setTab("settings");
+              setOpen(false);
+            }}
+            accessibilityRole="button"
+            style={styles.popoverAction}
+          >
+            <Txt variant="bodyStrong">Settings</Txt>
+          </Pressable>
+
+          <Txt variant="caption" tone="textMuted">
+            A seeded profile. Vesper has no accounts and no sign-in.
+          </Txt>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 export function CommandBar() {
   const { tab, setTab, openSheet } = useNavigation();
 
   return (
     <View style={styles.commandBar}>
-      <View style={styles.wordmark}>
-        <View style={styles.mark} />
-        <Txt variant="micro" tone="text">
-          VESPER
-        </Txt>
-      </View>
+      <Wordmark size={20} />
 
       <View style={styles.commandNav} accessibilityRole="tablist" accessibilityLabel="Sections">
-        {TABS.map(({ id, label }) => {
-          const active = id === tab;
-          return (
-            <Pressable
-              key={id}
-              onPress={() => setTab(id)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              style={styles.commandTab}
-            >
-              <Txt variant="micro" tone={active ? "text" : "textMuted"}>
-                {label}
-              </Txt>
-              {/* The underline is the selection, not a pill. A pill in a
-                  top bar reads as a button and invites a second click. */}
-              <View style={[styles.commandUnderline, active && styles.commandUnderlineActive]} />
-            </Pressable>
-          );
-        })}
+        {TABS.map(({ id, label }) => (
+          <CommandTab key={id} id={id} label={label} active={id === tab} onPress={setTab} />
+        ))}
       </View>
 
       <View style={styles.commandRight}>
         <RefreshRing />
+        <Profile />
         <Pressable
           onPress={() => openSheet("add-asset")}
           accessibilityRole="button"
@@ -236,104 +347,136 @@ export function CommandBar() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Ticker                                                              */
+/* Watchlist                                                           */
 /* ------------------------------------------------------------------ */
 
-/** One quote in the strip, flashing when its price moves. */
-function TickerItem({
-  symbol,
+/**
+ * One followed token.
+ *
+ * No sparkline, deliberately. A sparkline per card would mean a history
+ * request per watched token on a cold load, and following six tokens
+ * would quietly triple the request count against a rate limit we are
+ * already working around. Price and change is what a watch row is for;
+ * the shapes live on the Crypto tab, where they are already fetched.
+ */
+function WatchCard({
+  entry,
   price,
   change,
+  held,
+  active,
+  onPress,
 }: {
-  symbol: string;
+  entry: CatalogEntry;
   price: number;
   change: number;
+  held: boolean;
+  active: boolean;
+  onPress: () => void;
 }) {
-  const flash = useChangeFlash(price);
-  const tone = change >= 0 ? color.positive : color.negative;
+  const flash = useChangeFlash(Math.round(price * 100));
+  const up = change >= 0;
 
   return (
-    <View
-      style={[
-        styles.tickerItem,
-        flash === "up" && styles.tickerFlashUp,
-        flash === "down" && styles.tickerFlashDown,
-      ]}
+    <Tap
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${entry.label}, ${usd(price)}, ${pct(change)}`}
+      accessibilityState={{ selected: active }}
+      scaleTo={0.97}
     >
-      <Txt variant="micro" tone="textSecondary">
-        {symbol}
-      </Txt>
-      <Txt variant="mono" tone="text">
-        {usd(price)}
-      </Txt>
-      <Txt variant="mono" tone={change >= 0 ? "positive" : "negative"}>
-        {change >= 0 ? "▲" : "▼"} {pct(change).replace(/[+−]/, "")}
-      </Txt>
-      <View style={[styles.tickerRule, { backgroundColor: tone, opacity: 0.35 }]} />
-    </View>
+      <View
+        style={[
+          styles.watchCard,
+          active && styles.watchCardActive,
+          flash === "up" && styles.flashUp,
+          flash === "down" && styles.flashDown,
+        ]}
+      >
+        <CoinMark symbol={entry.symbol} size={22} />
+        <View style={styles.watchCopy}>
+          <View style={styles.watchTop}>
+            <Txt variant="micro" tone={held ? "text" : "textSecondary"}>
+              {entry.symbol}
+            </Txt>
+            {!held && (
+              // A watched token you do not own looks identical to one you
+              // do without this, and the difference is the whole point.
+              <View style={styles.watchOnly}>
+                <Txt variant="micro" tone="textMuted">
+                  WATCH
+                </Txt>
+              </View>
+            )}
+          </View>
+          <View style={styles.watchBottom}>
+            <Txt variant="mono" tone="text">
+              {price > 0 ? usd(price) : "—"}
+            </Txt>
+            <Txt variant="mono" tone={up ? "positive" : "negative"}>
+              {up ? "▲" : "▼"} {pct(change).replace(/[+−]/, "")}
+            </Txt>
+          </View>
+        </View>
+      </View>
+    </Tap>
   );
 }
 
 /**
- * The scrolling price strip.
+ * The watch bar.
  *
- * The list is rendered twice and translated by exactly one list width, so
- * the loop point lands on an identical frame and there is no seam. The
- * whole thing is decorative, so it stops entirely under reduced motion
- * rather than scrolling slower.
+ * This replaced a scrolling ticker. A ticker moves, which looks alive,
+ * but you cannot read a specific row without waiting for it to come
+ * round, and you certainly cannot click one. A fixed row of cards is
+ * worse television and a better instrument.
  */
-export function Ticker() {
-  const { assets, prices, reduceMotion } = useVesper();
-  const offset = useRef(new Animated.Value(0)).current;
-  const [runWidth, setRunWidth] = useState(0);
+export function Watchlist() {
+  const { assets, prices, watchlist } = useVesper();
+  const { setTab, openAsset, openSheet } = useNavigation();
 
-  const quotes = assets.filter(isDeFi).map((asset) => ({
-    symbol: asset.symbol,
-    price: prices.quotes[asset.coingeckoId]?.usd ?? 0,
-    change: prices.quotes[asset.coingeckoId]?.change24h ?? 0,
-  }));
+  const heldIds = new Set(assets.filter(isDeFi).map((asset) => asset.coingeckoId));
 
-  useEffect(() => {
-    if (reduceMotion || runWidth === 0) {
-      offset.setValue(0);
-      return;
-    }
+  const rows = watchlist
+    .map((id) => catalogById(id))
+    .filter((entry): entry is CatalogEntry => entry !== undefined);
 
-    offset.setValue(0);
-    const animation = Animated.loop(
-      Animated.timing(offset, {
-        toValue: -runWidth,
-        // Pace by distance, not by a fixed duration, so adding a token
-        // does not speed the strip up.
-        duration: runWidth * 28,
-        easing: ease.standard,
-        useNativeDriver: nativeDriver,
-      }),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [runWidth, reduceMotion, offset]);
-
-  if (quotes.length === 0) return <View style={styles.ticker} />;
+  if (rows.length === 0) return null;
 
   return (
-    <View style={styles.ticker}>
-      <Animated.View style={[styles.tickerRun, { transform: [{ translateX: offset }] }]}>
-        <View
-          style={styles.tickerRun}
-          onLayout={(event) => setRunWidth(event.nativeEvent.layout.width)}
-        >
-          {quotes.map((quote) => (
-            <TickerItem key={quote.symbol} {...quote} />
-          ))}
-        </View>
-        {/* The duplicate run, so the loop has something to scroll into. */}
-        <View style={styles.tickerRun} aria-hidden>
-          {quotes.map((quote) => (
-            <TickerItem key={`${quote.symbol}-echo`} {...quote} />
-          ))}
-        </View>
-      </Animated.View>
+    <View style={styles.watchBar}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.watchRun}
+      >
+        {rows.map((entry) => {
+          const quote = prices.quotes[entry.coingeckoId];
+          const held = heldIds.has(entry.coingeckoId);
+
+          return (
+            <WatchCard
+              key={entry.coingeckoId}
+              entry={entry}
+              price={quote?.usd ?? 0}
+              change={quote?.change24h ?? 0}
+              held={held}
+              active={false}
+              onPress={() => {
+                if (!held) {
+                  // Following something you do not hold, then clicking it,
+                  // is a request to start holding it.
+                  openSheet("add-asset");
+                  return;
+                }
+                const asset = assets.filter(isDeFi).find((a) => a.coingeckoId === entry.coingeckoId);
+                setTab("crypto");
+                if (asset) openAsset(asset.id);
+              }}
+            />
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -418,6 +561,46 @@ const styles = StyleSheet.create({
   commandUnderlineActive: {
     backgroundColor: color.accent,
   },
+  commandUnderlineHover: {
+    backgroundColor: color.hairlineStrong,
+  },
+  avatarButton: {
+    borderRadius: radius.pill,
+  },
+  scrim: {
+    flex: 1,
+    backgroundColor: color.scrim,
+  },
+  popover: {
+    position: "absolute",
+    top: 58,
+    right: space.md,
+    width: 264,
+    padding: space.md,
+    gap: space.md,
+    borderRadius: radius.md,
+    backgroundColor: color.groundRaised,
+    borderWidth: 1,
+    borderColor: color.hairlineStrong,
+  },
+  popoverHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+  },
+  popoverStats: {
+    flexDirection: "row",
+    gap: space.lg,
+  },
+  popoverStat: {
+    gap: 2,
+  },
+  popoverAction: {
+    paddingVertical: space.xs,
+    borderTopWidth: 1,
+    borderTopColor: color.hairline,
+    paddingTop: space.sm,
+  },
   commandRight: {
     flexDirection: "row",
     alignItems: "center",
@@ -449,35 +632,53 @@ const styles = StyleSheet.create({
     borderRadius: radius.xs,
   },
 
-  ticker: {
-    height: 34,
+  watchBar: {
     backgroundColor: color.well,
     borderBottomWidth: 1,
     borderBottomColor: color.hairline,
-    justifyContent: "center",
-    overflow: "hidden",
   },
-  tickerRun: {
+  watchRun: {
     flexDirection: "row",
-    alignItems: "center",
+    gap: 1,
+    backgroundColor: color.hairline,
   },
-  tickerItem: {
+  watchCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.xs,
     paddingHorizontal: space.md,
-    paddingVertical: space.xxs,
+    paddingVertical: space.xs,
+    minWidth: 184,
+    backgroundColor: color.well,
   },
-  tickerFlashUp: {
+  watchCardActive: {
+    backgroundColor: color.card,
+  },
+  watchCopy: {
+    flex: 1,
+    gap: 1,
+  },
+  watchTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.xs,
+  },
+  watchOnly: {
+    paddingHorizontal: 4,
+    borderRadius: 3,
+    backgroundColor: color.hairline,
+  },
+  watchBottom: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: space.xs,
+  },
+  flashUp: {
     backgroundColor: color.positiveSoft,
   },
-  tickerFlashDown: {
+  flashDown: {
     backgroundColor: color.negativeSoft,
-  },
-  tickerRule: {
-    width: 1,
-    height: 12,
-    marginLeft: space.sm,
   },
 });
 

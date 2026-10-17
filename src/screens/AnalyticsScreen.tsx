@@ -97,6 +97,8 @@ export function AnalyticsScreen() {
                   width={chart.width}
                   height={chart.height}
                   dimmed={series.loading && series.points.length === 0}
+                  crosshair
+                  range={range}
                 />
               )}
             </View>
