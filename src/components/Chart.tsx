@@ -11,13 +11,14 @@
  * renders identically everywhere.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Stop } from "react-native-svg";
 
-import { areaPath, project, smoothPath } from "../lib/chartPath";
+import { useVesper } from "../hooks/useVesper";
+import { areaPath, estimatePathLength, project, smoothPath } from "../lib/chartPath";
 import { extent } from "../lib/series";
-import { color, radius, space, type } from "../theme";
+import { color, duration, radius, space, type } from "../theme";
 import type { SeriesPoint } from "../types";
 import { Txt } from "./primitives";
 
@@ -33,6 +34,53 @@ interface AreaChartProps {
   marker?: boolean;
   /** Dims the whole chart while a refetch is in flight. */
   dimmed?: boolean;
+  /** Draws the line on from left to right when the data first arrives. */
+  animate?: boolean;
+}
+
+
+/**
+ * The draw-on.
+ *
+ * `strokeDasharray` is set to the whole path length and the offset walks
+ * to zero, so the line appears to be drawn left to right rather than
+ * fading in as a finished object. It runs once per distinct path: changing
+ * range redraws, a price tick does not, because a chart that redraws every
+ * two minutes is a chart nobody can read.
+ *
+ * Progress is held in state rather than an `Animated.Value` because
+ * react-native-svg's dash props are plain numbers on the native backends.
+ * It is one short burst of renders on a small component, once.
+ */
+function useDrawOn(length: number, enabled: boolean): number {
+  const { reduceMotion } = useVesper();
+  const [progress, setProgress] = useState(enabled && !reduceMotion ? 0 : 1);
+  const signature = Math.round(length);
+
+  useEffect(() => {
+    if (!enabled || reduceMotion || signature === 0) {
+      setProgress(1);
+      return;
+    }
+
+    setProgress(0);
+    const started = Date.now();
+    let frame = 0;
+
+    const tick = () => {
+      const elapsed = Date.now() - started;
+      const t = Math.min(1, elapsed / duration.rise);
+      // Ease out, so the line decelerates into its final point rather
+      // than stopping dead.
+      setProgress(1 - Math.pow(1 - t, 3));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [signature, enabled, reduceMotion]);
+
+  return progress;
 }
 
 export function AreaChart({
@@ -43,6 +91,7 @@ export function AreaChart({
   gridLines = 4,
   marker = true,
   dimmed,
+  animate = true,
 }: AreaChartProps) {
   const geometry = useMemo(() => {
     if (points.length < 2 || width <= 0 || height <= 0) return null;
@@ -54,14 +103,32 @@ export function AreaChart({
     return {
       line,
       area: areaPath(line, width, height),
+      length: estimatePathLength(points, projection),
       lastX: projection.x(points.length - 1),
       lastY: projection.y(points[points.length - 1]!.v),
     };
   }, [points, width, height]);
 
+  // Hooks cannot sit behind the early return below, so the draw-on is
+  // computed from a zero length when there is nothing to draw.
+  const progress = useDrawOn(geometry?.length ?? 0, animate);
+
   if (!geometry) {
     return <View style={{ width, height }} />;
   }
+
+  const drawing = progress < 1;
+  const reveal = {
+    dash: drawing
+      ? {
+          strokeDasharray: [geometry.length, geometry.length],
+          strokeDashoffset: geometry.length * (1 - progress),
+        }
+      : {},
+    // The fill lags the line, so the area arrives under a finished stroke.
+    fill: Math.max(0, progress * 1.6 - 0.6),
+    markerVisible: progress > 0.98,
+  };
 
   // A stable-enough id. Two charts on one screen with the same gradient id
   // would have the second silently adopt the first's colours.
@@ -72,9 +139,9 @@ export function AreaChart({
       <Svg width={width} height={height}>
         <Defs>
           <LinearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={tone} stopOpacity="0.34" />
-            <Stop offset="0.65" stopColor={tone} stopOpacity="0.06" />
-            <Stop offset="1" stopColor={tone} stopOpacity="0" />
+            <Stop offset="0" stopColor={tone} stopOpacity="0.38" />
+            <Stop offset="0.55" stopColor={tone} stopOpacity="0.12" />
+            <Stop offset="1" stopColor={tone} stopOpacity="0.02" />
           </LinearGradient>
         </Defs>
 
@@ -93,10 +160,28 @@ export function AreaChart({
           );
         })}
 
-        <Path d={geometry.area} fill={`url(#${fillId})`} />
+        <Path d={geometry.area} fill={`url(#${fillId})`} opacity={reveal.fill} />
 
-        <Path d={geometry.line} stroke={tone} strokeOpacity={0.1} strokeWidth={9} fill="none" />
-        <Path d={geometry.line} stroke={tone} strokeOpacity={0.22} strokeWidth={5} fill="none" />
+        {/* The glow is three strokes of one path at decreasing width.
+            An feGaussianBlur filter would be one element, but filter
+            support is patchy across react-native-svg's native backends
+            and this renders identically everywhere. */}
+        <Path
+          d={geometry.line}
+          stroke={tone}
+          strokeOpacity={0.1}
+          strokeWidth={9}
+          fill="none"
+          {...reveal.dash}
+        />
+        <Path
+          d={geometry.line}
+          stroke={tone}
+          strokeOpacity={0.22}
+          strokeWidth={5}
+          fill="none"
+          {...reveal.dash}
+        />
         <Path
           d={geometry.line}
           stroke={tone}
@@ -104,9 +189,10 @@ export function AreaChart({
           fill="none"
           strokeLinecap="round"
           strokeLinejoin="round"
+          {...reveal.dash}
         />
 
-        {marker && (
+        {marker && reveal.markerVisible && (
           <>
             <Circle cx={geometry.lastX} cy={geometry.lastY} r={7} fill={tone} opacity={0.18} />
             <Circle

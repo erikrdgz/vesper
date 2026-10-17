@@ -1,224 +1,33 @@
 /**
  * Analytics.
  *
- * The one screen that shows net worth over time, and the one place the
- * chart's honesty caveat has to appear: the crypto half is real market
- * history, the stated half is held flat because nobody records a daily
- * snapshot of a checking account. Saying so is cheaper than pretending.
+ * The one screen that plots net worth over time, and the one that has to
+ * carry the caveat: the crypto half is real market history, the stated
+ * half is held flat, because nobody records a daily snapshot of a checking
+ * account. The note sits under the chart rather than in a tooltip.
  */
 
 import { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { useMeasure } from "../hooks/useMeasure";
 import { useNetWorth } from "../hooks/useNetWorth";
 import { useResponsive } from "../hooks/useResponsive";
 import { usePortfolioSeries } from "../hooks/useSeries";
 import { useVesper } from "../hooks/useVesper";
 import { pct, usd, usdSigned, weight } from "../lib/format";
-import { space } from "../theme";
+import { color, space } from "../theme";
 import { isDeFi, type ChartRange } from "../types";
-import { Columns, Screen } from "../components/AppShell";
+import { Column, Row, Screen } from "../components/AppShell";
+import { AnimatedNumber } from "../components/AnimatedNumber";
 import { AreaChart, BarRow } from "../components/Chart";
-import {
-  Card,
-  Delta,
-  Divider,
-  SectionHeader,
-  Segmented,
-  Txt,
-} from "../components/primitives";
+import { Delta, Divider, Segmented, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
-import { Reveal } from "../components/Reveal";
+import { Pane } from "../components/terminal";
+import { tokenColor } from "../components/TokenObject";
 
 const RANGES = ["1D", "1W", "1M", "1Y"] as const satisfies readonly ChartRange[];
 
-export function AnalyticsScreen() {
-  const [range, setRange] = useState<ChartRange>("1M");
-  const netWorth = useNetWorth();
-  const { transactions } = useVesper();
-  const series = usePortfolioSeries(range);
-  const { isDesktop, primaryWidth, contentWidth } = useResponsive();
-
-  const chartWidth = (isDesktop ? primaryWidth : contentWidth) - space.lg * 2;
-
-  // Change across the visible window, which is not the same as the 24h
-  // figure on Home and should not silently borrow its number.
-  const windowChange = useMemo(() => {
-    if (series.points.length < 2) return { usd: 0, pct: 0 };
-    const first = series.points[0]!.v;
-    const last = series.points[series.points.length - 1]!.v;
-    return { usd: last - first, pct: first > 0 ? ((last - first) / first) * 100 : 0 };
-  }, [series.points]);
-
-  const monthlyFlow = useMemo(() => summariseFlow(transactions), [transactions]);
-
-  const primary = (
-    <>
-      <Reveal index={0}>
-        <Card>
-          <View style={styles.chartHead}>
-            <View style={styles.chartTitle}>
-              <Txt variant="micro" tone="textMuted">
-                Net worth
-              </Txt>
-              <Txt variant="display">{usd(netWorth.totalUsd)}</Txt>
-              <View style={styles.deltaRow}>
-                <Delta value={windowChange.pct} label={pct(windowChange.pct)} />
-                <Txt variant="caption" tone="textMuted">
-                  {usdSigned(windowChange.usd)} over {range}
-                </Txt>
-              </View>
-            </View>
-            <Segmented
-              label="Chart range"
-              options={RANGES}
-              value={range}
-              onChange={setRange}
-            />
-          </View>
-
-          <View style={{ marginTop: space.lg }}>
-            <AreaChart
-              points={series.points}
-              width={chartWidth}
-              height={200}
-              dimmed={series.loading && series.points.length === 0}
-            />
-          </View>
-
-          <Txt variant="caption" tone="textMuted" style={{ marginTop: space.sm }}>
-            Crypto is real market history. Stated balances are held flat, because Vesper keeps no
-            record of what your bank said last Tuesday.
-          </Txt>
-        </Card>
-      </Reveal>
-
-      <Reveal index={1}>
-        <Card>
-          <SectionHeader title="Money in and out" />
-          <View style={styles.flowSummary}>
-            <View style={styles.flowStat}>
-              <Txt variant="caption" tone="textMuted">
-                In
-              </Txt>
-              <Txt variant="h2" tone="positive">
-                {usd(monthlyFlow.income)}
-              </Txt>
-            </View>
-            <View style={styles.flowStat}>
-              <Txt variant="caption" tone="textMuted">
-                Spent
-              </Txt>
-              <Txt variant="h2" tone="negative">
-                {usd(monthlyFlow.spend)}
-              </Txt>
-            </View>
-            <View style={styles.flowStat}>
-              <Txt variant="caption" tone="textMuted">
-                Moved
-              </Txt>
-              <Txt variant="h2">{usd(monthlyFlow.moved)}</Txt>
-            </View>
-          </View>
-          <View style={{ marginTop: space.lg }}>
-            <BarRow values={monthlyFlow.byCategory} width={chartWidth} />
-          </View>
-          <Txt variant="caption" tone="textMuted" style={{ marginTop: space.sm }}>
-            Transfers between your own accounts are counted as moved, not spent, and left out of
-            the categories.
-          </Txt>
-        </Card>
-      </Reveal>
-    </>
-  );
-
-  const secondary = (
-    <>
-      <Reveal index={isDesktop ? 1 : 2}>
-        <Card padding="none">
-          <View style={styles.cardHead}>
-            <SectionHeader title="Allocation" />
-          </View>
-          {netWorth.valued
-            .filter((entry) => entry.valueUsd > 0)
-            .map((entry, index) => (
-              <View key={entry.asset.id}>
-                {index > 0 && <Divider style={styles.inset} />}
-                <View style={styles.allocRow}>
-                  <View style={styles.allocCopy}>
-                    <Txt variant="bodyStrong" numberOfLines={1}>
-                      {entry.asset.label}
-                    </Txt>
-                    <Txt variant="caption" tone="textMuted">
-                      {isDeFi(entry.asset) ? "Marked to market" : "Stated balance"}
-                    </Txt>
-                  </View>
-                  <View style={styles.allocValue}>
-                    <Txt variant="bodyStrong">{usd(entry.valueUsd)}</Txt>
-                    <Txt variant="caption" tone="textMuted">
-                      {weight(entry.weight)}
-                    </Txt>
-                  </View>
-                </View>
-              </View>
-            ))}
-        </Card>
-      </Reveal>
-
-      <Reveal index={isDesktop ? 2 : 3}>
-        <Card>
-          <SectionHeader title="Movers today" />
-          {netWorth.valued
-            .filter((entry) => isDeFi(entry.asset) && entry.priced)
-            .sort((a, b) => Math.abs(b.change24hPct) - Math.abs(a.change24hPct))
-            .slice(0, 3)
-            .map((entry) => (
-              <View key={entry.asset.id} style={styles.moverRow}>
-                <Txt variant="bodyStrong">
-                  {isDeFi(entry.asset) ? entry.asset.symbol : entry.asset.label}
-                </Txt>
-                <Txt variant="caption" tone="textMuted" style={{ flex: 1 }}>
-                  {usdSigned(entry.change24hUsd)}
-                </Txt>
-                <Delta value={entry.change24hPct} label={pct(entry.change24hPct)} />
-              </View>
-            ))}
-          <Divider style={{ marginVertical: space.sm }} />
-          <PriceSourceNote />
-        </Card>
-      </Reveal>
-
-      {netWorth.liabilitiesUsd > 0 && (
-        <Reveal index={isDesktop ? 3 : 4}>
-          <Card>
-            <SectionHeader title="Owed" />
-            <Txt variant="display" tone="negative">
-              {usd(netWorth.liabilitiesUsd)}
-            </Txt>
-            <Txt variant="caption" tone="textMuted" style={{ marginTop: space.xs }}>
-              Subtracted from net worth, left out of the allocation percentages.
-            </Txt>
-          </Card>
-        </Reveal>
-      )}
-    </>
-  );
-
-  return (
-    <Screen>
-      <View style={styles.header}>
-        <Txt variant="h1" heading>
-          Analytics
-        </Txt>
-      </View>
-      <Columns primary={primary} secondary={secondary} />
-    </Screen>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
-/** Four characters is not enough to tell "transport" from "transfer". */
 const CATEGORY_LABEL: Record<string, string> = {
   food: "Food",
   transport: "Travel",
@@ -228,17 +37,187 @@ const CATEGORY_LABEL: Record<string, string> = {
   shopping: "Shops",
 };
 
-/**
- * Split the ledger three ways.
- *
- * Money sent to your own exchange account is not spending, and counting it
- * as such does two bad things: it inflates the "out" figure, and one 500
- * transfer flattens every real category into a stub next to it. So
- * transfers get their own line and stay out of the category bars.
- */
+export function AnalyticsScreen() {
+  const [range, setRange] = useState<ChartRange>("1M");
+  const netWorth = useNetWorth();
+  const { transactions } = useVesper();
+  const series = usePortfolioSeries(range);
+  const { isDesktop } = useResponsive();
+  const chart = useMeasure();
+  const bars = useMeasure();
+
+  // Change across the visible window, which is not the 24h figure on
+  // Overview and must not silently borrow its number.
+  const windowChange = useMemo(() => {
+    if (series.points.length < 2) return { usd: 0, pct: 0 };
+    const first = series.points[0]!.v;
+    const last = series.points[series.points.length - 1]!.v;
+    return { usd: last - first, pct: first > 0 ? ((last - first) / first) * 100 : 0 };
+  }, [series.points]);
+
+  const flow = useMemo(() => summariseFlow(transactions), [transactions]);
+  const movers = useMemo(
+    () =>
+      netWorth.valued
+        .filter((entry) => isDeFi(entry.asset) && entry.priced)
+        .sort((a, b) => Math.abs(b.change24hPct) - Math.abs(a.change24hPct))
+        .slice(0, 4),
+    [netWorth.valued],
+  );
+
+  return (
+    <Screen>
+      <Row flex={1}>
+        <Column flex={2.2}>
+          <Pane
+            flex={2}
+            minHeight={isDesktop ? undefined : 320}
+            title="Net worth"
+            action={
+              <Segmented label="Chart range" options={RANGES} value={range} onChange={setRange} />
+            }
+          >
+            <View style={styles.head}>
+              <AnimatedNumber value={usd(netWorth.totalUsd)} variant="display" />
+              <View style={styles.headRight}>
+                <Delta
+                  value={windowChange.pct}
+                  label={`${windowChange.pct >= 0 ? "▲" : "▼"} ${pct(windowChange.pct).replace(/[+−]/, "")}`}
+                />
+                <Txt variant="mono" tone="textMuted">
+                  {usdSigned(windowChange.usd)} over {range}
+                </Txt>
+              </View>
+            </View>
+
+            <View style={styles.chartFill} onLayout={chart.onLayout}>
+              {chart.ready && (
+                <AreaChart
+                  points={series.points}
+                  width={chart.width}
+                  height={chart.height}
+                  dimmed={series.loading && series.points.length === 0}
+                />
+              )}
+            </View>
+
+            <Txt variant="caption" tone="textMuted">
+              Crypto is real market history. Stated balances are held flat, because Vesper keeps no
+              record of what your bank said last Tuesday.
+            </Txt>
+          </Pane>
+
+          <Pane
+            flex={1}
+            minHeight={isDesktop ? undefined : 200}
+            title="Money in and out"
+            action={
+              <Txt variant="mono" tone="textMuted">
+                {usd(flow.income)} in · {usd(flow.spent)} spent · {usd(flow.moved)} moved
+              </Txt>
+            }
+          >
+            <View style={styles.barsFill} onLayout={bars.onLayout}>
+              {bars.ready && flow.byCategory.length > 0 && (
+                <BarRow
+                  values={flow.byCategory}
+                  width={bars.width}
+                  height={Math.max(32, bars.height - 26)}
+                />
+              )}
+            </View>
+            <Txt variant="caption" tone="textMuted">
+              Transfers between your own accounts count as moved, not spent, and stay out of the
+              categories.
+            </Txt>
+          </Pane>
+        </Column>
+
+        <Column flex={1}>
+          <Pane
+            flex={1.4}
+            title="Allocation"
+            scroll={isDesktop}
+            flush
+            action={
+              <Txt variant="mono" tone="textMuted">
+                {usd(netWorth.tradFiUsd + netWorth.deFiUsd)}
+              </Txt>
+            }
+          >
+            {netWorth.valued
+              .filter((entry) => entry.valueUsd > 0)
+              .map((entry, index) => (
+                <View key={entry.asset.id}>
+                  {index > 0 && <Divider />}
+                  <View style={styles.allocRow}>
+                    <View
+                      style={[
+                        styles.tick,
+                        {
+                          backgroundColor: isDeFi(entry.asset)
+                            ? tokenColor(entry.asset.symbol)
+                            : color.textMuted,
+                        },
+                      ]}
+                    />
+                    <View style={styles.allocCopy}>
+                      <Txt variant="bodyStrong" numberOfLines={1}>
+                        {entry.asset.label}
+                      </Txt>
+                      <Txt variant="micro" tone="textMuted">
+                        {isDeFi(entry.asset) ? "Marked to market" : "Stated balance"}
+                      </Txt>
+                    </View>
+                    <View style={styles.allocValue}>
+                      <Txt variant="mono">{usd(entry.valueUsd)}</Txt>
+                      <Txt variant="micro" tone="textMuted">
+                        {weight(entry.weight)}
+                      </Txt>
+                    </View>
+                  </View>
+                </View>
+              ))}
+          </Pane>
+
+          <Pane flex={1} title="Movers · 24h">
+            {movers.map((entry) => (
+              <View key={entry.asset.id} style={styles.moverRow}>
+                <Txt variant="bodyStrong">
+                  {isDeFi(entry.asset) ? entry.asset.symbol : entry.asset.label}
+                </Txt>
+                <Txt variant="mono" tone="textMuted" style={styles.moverAmount}>
+                  {usdSigned(entry.change24hUsd)}
+                </Txt>
+                <Delta
+                  value={entry.change24hPct}
+                  label={`${entry.change24hPct >= 0 ? "▲" : "▼"} ${pct(entry.change24hPct).replace(/[+−]/, "")}`}
+                />
+              </View>
+            ))}
+            <Divider />
+            <PriceSourceNote />
+          </Pane>
+
+          {netWorth.liabilitiesUsd > 0 && (
+            <Pane title="Owed">
+              <Txt variant="h1" tone="negative">
+                {usd(netWorth.liabilitiesUsd)}
+              </Txt>
+              <Txt variant="caption" tone="textMuted">
+                Subtracted from net worth, left out of the allocation percentages.
+              </Txt>
+            </Pane>
+          )}
+        </Column>
+      </Row>
+    </Screen>
+  );
+}
+
 function summariseFlow(transactions: { amountUsd: number; category: string }[]) {
   let income = 0;
-  let spend = 0;
+  let spent = 0;
   let moved = 0;
   const buckets = new Map<string, number>();
 
@@ -247,14 +226,12 @@ function summariseFlow(transactions: { amountUsd: number; category: string }[]) 
       income += transaction.amountUsd;
       continue;
     }
-
     const amount = Math.abs(transaction.amountUsd);
     if (transaction.category === "transfer") {
       moved += amount;
       continue;
     }
-
-    spend += amount;
+    spent += amount;
     buckets.set(transaction.category, (buckets.get(transaction.category) ?? 0) + amount);
   }
 
@@ -263,50 +240,41 @@ function summariseFlow(transactions: { amountUsd: number; category: string }[]) 
     .slice(0, 6)
     .map(([label, value]) => ({ label: CATEGORY_LABEL[label] ?? label, value }));
 
-  return { income, spend, moved, byCategory };
+  return { income, spent, moved, byCategory };
 }
 
 const styles = StyleSheet.create({
-  header: {
+  head: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  chartHead: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "flex-end",
     justifyContent: "space-between",
     flexWrap: "wrap",
-    gap: space.md,
+    gap: space.sm,
   },
-  chartTitle: {
-    gap: space.xxs,
-  },
-  deltaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.xs,
-  },
-  flowSummary: {
-    flexDirection: "row",
-    gap: space.xl,
-    flexWrap: "wrap",
-  },
-  flowStat: {
+  headRight: {
+    alignItems: "flex-end",
     gap: 2,
   },
-  cardHead: {
-    paddingHorizontal: space.lg,
-    paddingTop: space.lg,
+  chartFill: {
+    flex: 1,
+    minHeight: 140,
+    marginHorizontal: -space.md,
   },
-  inset: {
-    marginHorizontal: space.lg,
+  barsFill: {
+    flex: 1,
+    minHeight: 80,
+    justifyContent: "flex-end",
+  },
+  tick: {
+    width: 3,
+    height: 26,
+    borderRadius: 2,
   },
   allocRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.md,
     paddingVertical: space.sm,
   },
   allocCopy: {
@@ -321,6 +289,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    paddingVertical: space.xs,
+  },
+  moverAmount: {
+    flex: 1,
   },
 });

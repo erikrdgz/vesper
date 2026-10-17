@@ -89,20 +89,24 @@ function Prism({ tone, flipIndex, reduceMotion }: PrismProps) {
     const flipTarget = flipIndex * Math.PI;
 
     if (reduceMotion) {
-      group.current.rotation.y = flipTarget;
-      group.current.rotation.x = 0;
-      group.current.rotation.z = 0;
+      group.current.rotation.set(0, flipTarget, 0);
     } else {
-      // Idle spin plus the accumulated half-turns from selections.
-      const idle = state.clock.elapsedTime * 0.35;
-      group.current.rotation.y = flip.step(flipTarget, delta) + idle;
+      // Two rotations doing different jobs. The idle spin is in-plane, on
+      // the axis pointing at the camera, so the face stays toward the
+      // viewer and the prism always reads as a solid hexagon. Folding the
+      // idle spin into the flip axis instead left it edge-on, and a
+      // sliver, for half of every revolution.
+      group.current.rotation.z = state.clock.elapsedTime * 0.22;
+
+      // The flip is edge-over-edge, and only ever on selection.
+      group.current.rotation.y =
+        flip.step(flipTarget, delta) + tiltY.step(state.pointer.x * -0.4, delta);
 
       // `pointer` is already normalised to −1..1 across the canvas.
-      group.current.rotation.x = tiltX.step(state.pointer.y * 0.32, delta);
-      group.current.rotation.z = tiltY.step(state.pointer.x * -0.18, delta);
+      group.current.rotation.x = tiltX.step(state.pointer.y * 0.34, delta);
 
-      if (ringA.current) ringA.current.rotation.z += delta * 0.4;
-      if (ringB.current) ringB.current.rotation.z -= delta * 0.25;
+      if (ringA.current) ringA.current.rotation.z += delta * 0.5;
+      if (ringB.current) ringB.current.rotation.z -= delta * 0.3;
     }
 
     // Cross-fade the metal rather than cutting, so a selection reads as one
@@ -115,7 +119,7 @@ function Prism({ tone, flipIndex, reduceMotion }: PrismProps) {
   const ringMaterial: ThreeElements["meshBasicMaterial"] = {
     color: palette.accent,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.3,
   };
 
   return (
@@ -123,21 +127,21 @@ function Prism({ tone, flipIndex, reduceMotion }: PrismProps) {
       <mesh ref={mesh} rotation={[Math.PI / 2, 0, 0]}>
         {/* Six-sided prism: faceted enough to catch the key light as it
             turns, regular enough not to read as a gemstone. */}
-        <cylinderGeometry args={[1, 1, 0.26, 6]} />
+        <cylinderGeometry args={[1.25, 1.25, 0.34, 6]} />
         <meshStandardMaterial
           metalness={0.92}
           roughness={0.26}
-          emissiveIntensity={0.16}
+          emissiveIntensity={0.3}
         />
       </mesh>
 
       <mesh ref={ringA} rotation={[Math.PI / 2.6, 0, 0]}>
-        <torusGeometry args={[1.5, 0.008, 8, 96]} />
+        <torusGeometry args={[1.85, 0.012, 8, 96]} />
         <meshBasicMaterial {...ringMaterial} />
       </mesh>
 
       <mesh ref={ringB} rotation={[Math.PI / 1.8, Math.PI / 5, 0]}>
-        <torusGeometry args={[1.82, 0.006, 8, 96]} />
+        <torusGeometry args={[2.25, 0.009, 8, 96]} />
         <meshBasicMaterial {...ringMaterial} opacity={0.14} />
       </mesh>
     </group>
@@ -159,7 +163,7 @@ export function TokenObject({ symbol, flipIndex, height = 220 }: TokenObjectProp
   return (
     <View style={[styles.root, { height }]} pointerEvents="box-none">
       <Canvas
-        camera={{ position: [0, 0, 5.2], fov: 42 }}
+        camera={{ position: [0, 0, 5.6], fov: 48 }}
         // Clear to the card surface rather than transparent: an alpha
         // canvas composited over a glow costs a full-screen blend on every
         // frame for a difference nobody can see.
@@ -167,10 +171,10 @@ export function TokenObject({ symbol, flipIndex, height = 220 }: TokenObjectProp
         dpr={[1, 2]}
         frameloop={reduceMotion ? "demand" : "always"}
       >
-        <ambientLight intensity={0.55} />
-        <directionalLight position={[-3, 4, 4]} intensity={2.1} />
-        <pointLight position={[3.5, -1.5, 2.5]} intensity={18} color={palette.accent} />
-        <pointLight position={[-2.5, -2, -2]} intensity={6} color="#4B6CF0" />
+        <ambientLight intensity={0.8} />
+        <directionalLight position={[-3, 4, 4]} intensity={3.4} />
+        <pointLight position={[3.5, -1.5, 2.5]} intensity={34} color={palette.accent} />
+        <pointLight position={[-2.5, -2, -2]} intensity={14} color="#4B6CF0" />
 
         <Prism tone={tone} flipIndex={flipIndex} reduceMotion={reduceMotion} />
       </Canvas>

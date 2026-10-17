@@ -134,6 +134,8 @@ function Digit({
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    // Bottom, not top: the cents are set smaller than the dollars, and
+    // aligning their tops floats them above the baseline.
+    alignItems: "flex-end",
   },
 });

@@ -16,7 +16,7 @@ import { VesperProvider } from "./src/hooks/useVesper";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
 import { AssetDetailScreen } from "./src/screens/AssetDetailScreen";
 import { CryptoScreen } from "./src/screens/CryptoScreen";
-import { HomeScreen } from "./src/screens/HomeScreen";
+import { OverviewScreen } from "./src/screens/OverviewScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { color } from "./src/theme";
 
@@ -36,7 +36,7 @@ function Router() {
       return <SettingsScreen />;
     case "home":
     default:
-      return <HomeScreen />;
+      return <OverviewScreen />;
   }
 }
 

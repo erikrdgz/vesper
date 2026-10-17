@@ -1,11 +1,15 @@
 /**
  * The frame: one set of screens, two sets of chrome.
  *
- * Above 768px the four tabs become a left rail and the content sits in a
- * 65/35 grid capped at 1200px. Below it, the same tabs become a bottom bar
- * with the add button raised out of it, and the grid collapses to one
- * column. The screens themselves do not know which they are in — they ask
- * `<Columns>` for a layout and it resolves.
+ * Desktop is a terminal. A command bar carries the navigation, a ticker
+ * runs underneath it, and the rest of the window is a grid of panes that
+ * fills the viewport and does not scroll as a page — panes that need more
+ * room scroll inside themselves, the way a real terminal's blotter does.
+ * There is no sidebar and no max-width: the content is the instrument, not
+ * an article about one.
+ *
+ * Mobile is a phone app. The same panes stack into one scrolling column
+ * under a bottom tab bar with the add button raised out of it.
  */
 
 import React from "react";
@@ -14,7 +18,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native"
 import { useNavigation } from "../hooks/useNavigation";
 import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
-import { color, layout, radius, shadow, space } from "../theme";
+import { color, layout, shadow, space } from "../theme";
 import type { TabId } from "../types";
 import {
   AnalyticsIcon,
@@ -24,127 +28,75 @@ import {
   SettingsIcon,
   type IconProps,
 } from "./icons";
+import { CommandBar, Grid, Ticker } from "./terminal";
 import { Txt } from "./primitives";
 
 const TABS: { id: TabId; label: string; Icon: (props: IconProps) => React.ReactElement }[] = [
-  { id: "home", label: "Home", Icon: HomeIcon },
+  { id: "home", label: "Overview", Icon: HomeIcon },
   { id: "analytics", label: "Analytics", Icon: AnalyticsIcon },
   { id: "crypto", label: "Crypto", Icon: CryptoIcon },
   { id: "settings", label: "Settings", Icon: SettingsIcon },
 ];
 
 /* ------------------------------------------------------------------ */
-/* Layout                                                              */
+/* Screen scaffolding                                                  */
 /* ------------------------------------------------------------------ */
 
 /**
- * The two-column grid, or one column on a phone.
+ * What a screen renders into.
  *
- * Widths are resolved in points by `useResponsive` rather than left as
- * percentages, because the charts are SVG and need a number to draw into.
+ * On desktop the children are a `Grid` that fills the remaining height.
+ * On mobile they are a column that scrolls. Screens hand over the same
+ * panes either way; only this decides what happens to them.
  */
-export function Columns({
-  primary,
-  secondary,
-}: {
-  primary: React.ReactNode;
-  secondary: React.ReactNode;
-}) {
-  const { isDesktop, primaryWidth, secondaryWidth } = useResponsive();
+export function Screen({ children }: { children: React.ReactNode }) {
+  const { isDesktop } = useResponsive();
 
-  if (!isDesktop) {
-    return (
-      <View style={styles.singleColumn}>
-        {primary}
-        {secondary}
-      </View>
-    );
+  if (isDesktop) {
+    return <View style={styles.desktopScreen}>{children}</View>;
   }
 
   return (
-    <View style={styles.columns}>
-      <View style={{ width: primaryWidth, gap: space.xl }}>{primary}</View>
-      <View style={{ width: secondaryWidth, gap: space.xl }}>{secondary}</View>
-    </View>
-  );
-}
-
-/** Every screen's outer scroll container, so padding is defined once. */
-export function Screen({ children }: { children: React.ReactNode }) {
-  const { isDesktop, gutter, contentWidth } = useResponsive();
-
-  return (
     <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[
-        styles.scrollContent,
-        {
-          paddingHorizontal: gutter,
-          // Clear the bottom bar and the raised add button on a phone.
-          paddingBottom: isDesktop ? space.huge : layout.tabBarHeight + space.huge,
-        },
-      ]}
+      style={styles.mobileScroll}
+      contentContainerStyle={styles.mobileContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ width: contentWidth, alignSelf: "center", gap: space.xl }}>{children}</View>
+      <Grid direction="column">{children}</Grid>
     </ScrollView>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Chrome                                                              */
-/* ------------------------------------------------------------------ */
-
-function Rail() {
-  const { tab, setTab, openSheet } = useNavigation();
-
+/**
+ * A row of panes on desktop that becomes a stack on mobile.
+ *
+ * Screens express composition once; the breakpoint is resolved here.
+ */
+export function Row({ children, flex }: { children: React.ReactNode; flex?: number }) {
+  const { isDesktop } = useResponsive();
   return (
-    <View style={styles.rail} accessibilityRole="tablist" accessibilityLabel="Sections">
-      <View style={styles.wordmark}>
-        <View style={styles.mark} />
-        <Txt variant="h2">Vesper</Txt>
-      </View>
-
-      <View style={styles.railItems}>
-        {TABS.map(({ id, label, Icon }) => {
-          const active = id === tab;
-          return (
-            <Pressable
-              key={id}
-              onPress={() => setTab(id)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              style={[styles.railItem, active && styles.railItemActive]}
-            >
-              <Icon size={20} tone={active ? color.accent : color.textSecondary} />
-              <Txt variant="title" tone={active ? "text" : "textSecondary"}>
-                {label}
-              </Txt>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Pressable
-        onPress={() => openSheet("add-asset")}
-        accessibilityRole="button"
-        accessibilityLabel="Add an asset"
-        style={[styles.railAdd, shadow.glow]}
-      >
-        <PlusIcon size={18} tone={color.accentInk} />
-        <Txt variant="title" tone="accentInk">
-          Add asset
-        </Txt>
-      </Pressable>
-    </View>
+    <Grid direction={isDesktop ? "row" : "column"} flex={isDesktop ? flex : undefined}>
+      {children}
+    </Grid>
   );
 }
 
+/** A column of panes, on both breakpoints. */
+export function Column({ children, flex }: { children: React.ReactNode; flex?: number }) {
+  const { isDesktop } = useResponsive();
+  return (
+    <Grid direction="column" flex={isDesktop ? flex : undefined}>
+      {children}
+    </Grid>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile chrome                                                       */
+/* ------------------------------------------------------------------ */
+
 function TabBar() {
   const { tab, setTab, openSheet } = useNavigation();
-
-  // Two tabs, the raised button, then two more — the arrangement in the
-  // reference, and the reason the add button is not a fifth tab.
   const left = TABS.slice(0, 2);
   const right = TABS.slice(2);
 
@@ -211,15 +163,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isDesktop) {
     return (
-      <View style={[styles.root, styles.desktop]}>
-        <Rail />
-        <View style={styles.desktopContent}>{children}</View>
+      <View style={styles.root}>
+        <CommandBar />
+        <Ticker />
+        <View style={styles.desktopBody}>{children}</View>
       </View>
     );
   }
 
   return (
     <View style={styles.root}>
+      <Ticker />
       {children}
       <TabBar />
     </View>
@@ -231,70 +185,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: color.ground,
   },
-  desktop: {
-    flexDirection: "row",
-  },
-  desktopContent: {
+  desktopBody: {
     flex: 1,
   },
-  scroll: {
+  desktopScreen: {
     flex: 1,
   },
-  scrollContent: {
-    paddingTop: space.xxl,
-  },
-  columns: {
-    flexDirection: "row",
-    gap: layout.columnGap,
-    alignItems: "flex-start",
-  },
-  singleColumn: {
-    gap: space.md,
-  },
-
-  rail: {
-    width: layout.railWidth,
-    borderRightWidth: 1,
-    borderRightColor: color.hairline,
-    paddingHorizontal: space.md,
-    paddingVertical: space.xl,
-    gap: space.xl,
-  },
-  wordmark: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    paddingHorizontal: space.xs,
-  },
-  mark: {
-    width: 26,
-    height: 26,
-    borderRadius: 9,
-    backgroundColor: color.accent,
-  },
-  railItems: {
-    gap: space.xxs,
+  mobileScroll: {
     flex: 1,
   },
-  railItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    paddingHorizontal: space.sm,
-    paddingVertical: space.sm,
-    borderRadius: radius.md,
-  },
-  railItemActive: {
-    backgroundColor: color.card,
-  },
-  railAdd: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.xs,
-    backgroundColor: color.accent,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
+  mobileContent: {
+    paddingBottom: layout.tabBarHeight + space.xxl,
   },
 
   tabBar: {
@@ -318,7 +219,6 @@ const styles = StyleSheet.create({
     backgroundColor: color.accent,
     alignItems: "center",
     justifyContent: "center",
-    // Lifts the button out of the bar, as in the reference.
     marginTop: Platform.OS === "web" ? -26 : -22,
     marginHorizontal: space.xs,
   },

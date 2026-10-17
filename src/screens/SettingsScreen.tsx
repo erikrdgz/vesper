@@ -14,19 +14,13 @@ import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
 import { relativeTime, usd } from "../lib/format";
 import { color, radius, space } from "../theme";
-import { Columns, Screen } from "../components/AppShell";
+import { isDeFi } from "../types";
+import { Column, Row, Screen } from "../components/AppShell";
 import { ToggleRow } from "../components/Field";
-import { RefreshIcon, TrashIcon, WalletIcon } from "../components/icons";
-import {
-  Action,
-  Avatar,
-  Card,
-  Divider,
-  SectionHeader,
-  Txt,
-} from "../components/primitives";
+import { RefreshIcon, TrashIcon } from "../components/icons";
+import { Action, Divider, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
-import { Reveal } from "../components/Reveal";
+import { Pane } from "../components/terminal";
 
 export function SettingsScreen() {
   const {
@@ -43,109 +37,76 @@ export function SettingsScreen() {
   const { isDesktop } = useResponsive();
   const [confirmingReset, setConfirmingReset] = useState(false);
 
-  const primary = (
-    <>
-      <Reveal index={0}>
-        <Card>
-          <View style={styles.profile}>
-            <Avatar name="Leonard Lopez" size={56} />
-            <View style={{ flex: 1 }}>
-              <Txt variant="h2">Leonard Lopez</Txt>
-              <Txt variant="caption" tone="textMuted">
-                @leonardlopez
-              </Txt>
-            </View>
-          </View>
+  const tokens = assets.filter(isDeFi).length;
 
-          <View style={styles.tiles}>
-            <View style={[styles.tile, styles.tileAccent]}>
-              <WalletIcon size={18} tone={color.accentInk} />
-              <Txt variant="bodyStrong" tone="accentInk">
-                Standard
-              </Txt>
-              <Txt variant="caption" style={styles.onLimeMuted}>
-                Your plan
-              </Txt>
+  return (
+    <Screen>
+      <Row flex={1}>
+        <Column flex={2.2}>
+          <Pane title="Account" minHeight={isDesktop ? undefined : 150}>
+            <View style={styles.tiles}>
+              <Tile label="Plan" value="Standard" accent />
+              <Tile label="Accounts" value={String(assets.length - tokens)} />
+              <Tile label="Tokens" value={String(tokens)} />
+              <Tile label="Net worth" value={usd(netWorth.totalUsd)} />
             </View>
-            <View style={styles.tile}>
-              <Txt variant="bodyStrong">{assets.length}</Txt>
-              <Txt variant="caption" tone="textMuted">
-                Accounts tracked
-              </Txt>
-            </View>
-          </View>
-        </Card>
-      </Reveal>
+          </Pane>
 
-      <Reveal index={1}>
-        <Card>
-          <SectionHeader title="Motion" />
-          <ToggleRow
-            label="Reduce motion"
-            description={
-              reduceMotionOverride === null
-                ? `Following your system setting, which is currently ${systemReduceMotion ? "on" : "off"}.`
-                : "Set here, overriding your system setting."
-            }
-            value={reduceMotion}
-            onChange={(value) =>
-              // Returning to the system setting needs a third state, so
-              // switching it back off while the OS also wants it off is
-              // read as "stop overriding" rather than "force off".
-              setReduceMotion(value === systemReduceMotion ? null : value)
-            }
-          />
-        </Card>
-      </Reveal>
-
-      <Reveal index={2}>
-        <Card>
-          <SectionHeader title="What this is" />
-          <Txt variant="body" tone="textSecondary">
-            Vesper connects to no bank and holds no keys. The accounts are seeded mock data you can
-            edit, kept in this browser and sent nowhere.
-          </Txt>
-          <Txt variant="body" tone="textSecondary" style={{ marginTop: space.sm }}>
-            The one network call it makes is to CoinGecko's public price endpoint. Crypto values are
-            real. Everything else is a number you typed.
-          </Txt>
-          <Divider style={{ marginVertical: space.md }} />
-          <View style={styles.row}>
-            <Txt variant="caption" tone="textSecondary">
-              Net worth on this device
+          <Pane flex={1} title="What this is" minHeight={isDesktop ? undefined : 220}>
+            <Txt variant="body" tone="textSecondary">
+              Vesper connects to no bank and holds no keys. The accounts are seeded mock data you
+              can edit, kept in this browser and sent nowhere.
             </Txt>
-            <Txt variant="bodyStrong">{usd(netWorth.totalUsd)}</Txt>
-          </View>
-        </Card>
-      </Reveal>
-    </>
-  );
+            <Txt variant="body" tone="textSecondary">
+              The one network call it makes is to CoinGecko's public price endpoint. Crypto values
+              are real. Everything else is a number you typed.
+            </Txt>
+            <Divider />
+            <Txt variant="caption" tone="textMuted">
+              Built with React Native primitives and compiled to the web by Expo. The same
+              components would run on a phone.
+            </Txt>
+          </Pane>
 
-  const secondary = (
-    <>
-      <Reveal index={isDesktop ? 1 : 3}>
-        <Card>
-          <SectionHeader title="Price feed" />
-          <PriceSourceNote />
-          <Txt variant="caption" tone="textMuted" style={{ marginVertical: space.sm }}>
-            Last checked {relativeTime(prices.fetchedAt)}.
-          </Txt>
-          <Action
-            label="Refresh now"
-            onPress={() => refreshPrices({ force: true })}
-            icon={<RefreshIcon size={16} />}
-          />
-        </Card>
-      </Reveal>
+          <Pane title="Motion">
+            <ToggleRow
+              label="Reduce motion"
+              description={
+                reduceMotionOverride === null
+                  ? `Following your system setting, which is currently ${systemReduceMotion ? "on" : "off"}.`
+                  : "Set here, overriding your system setting."
+              }
+              value={reduceMotion}
+              onChange={(value) =>
+                // Returning to the system setting needs a third state, so
+                // switching it back off while the OS also wants it off is
+                // read as "stop overriding" rather than "force off".
+                setReduceMotion(value === systemReduceMotion ? null : value)
+              }
+            />
+          </Pane>
+        </Column>
 
-      <Reveal index={isDesktop ? 2 : 4}>
-        <Card>
-          <SectionHeader title="Stored data" />
-          <Txt variant="caption" tone="textSecondary">
-            Your accounts, holdings and preferences live under one key in this browser's local
-            storage. Clearing it puts the seeded book back.
-          </Txt>
-          <View style={{ marginTop: space.md, gap: space.xs }}>
+        <Column flex={1}>
+          <Pane title="Price feed">
+            <PriceSourceNote />
+            <Txt variant="caption" tone="textMuted">
+              Last checked {relativeTime(prices.fetchedAt)}.
+            </Txt>
+            <Action
+              label="Refresh now"
+              onPress={() => refreshPrices({ force: true })}
+              icon={<RefreshIcon size={16} />}
+            />
+          </Pane>
+
+          <Pane flex={1} title="Stored data">
+            <Txt variant="caption" tone="textSecondary">
+              Your accounts, holdings and preferences live under one key in this browser's local
+              storage. Price history is cached separately for an hour, so a reload costs CoinGecko
+              nothing.
+            </Txt>
+
             {confirmingReset ? (
               <>
                 <Txt variant="caption" tone="negative">
@@ -169,59 +130,41 @@ export function SettingsScreen() {
                 onPress={() => setConfirmingReset(true)}
               />
             )}
-          </View>
-        </Card>
-      </Reveal>
-    </>
-  );
-
-  return (
-    <Screen>
-      <View style={styles.header}>
-        <Txt variant="h1" heading>
-          Settings
-        </Txt>
-      </View>
-      <Columns primary={primary} secondary={secondary} />
+          </Pane>
+        </Column>
+      </Row>
     </Screen>
   );
 }
 
+function Tile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <View style={[styles.tile, accent && styles.tileAccent]}>
+      <Txt variant="micro" tone={accent ? "accentInk" : "textMuted"}>
+        {label}
+      </Txt>
+      <Txt variant="h2" tone={accent ? "accentInk" : "text"}>
+        {value}
+      </Txt>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  profile: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.md,
-  },
   tiles: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: space.sm,
-    marginTop: space.lg,
   },
   tile: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: 120,
     gap: space.xxs,
     padding: space.md,
-    borderRadius: radius.md,
-    backgroundColor: color.cardRaised,
-    borderWidth: 1,
-    borderColor: color.hairline,
+    borderRadius: radius.xs,
+    backgroundColor: color.card,
   },
   tileAccent: {
     backgroundColor: color.accent,
-    borderColor: color.accent,
-  },
-  onLimeMuted: {
-    color: "rgba(11, 14, 20, 0.62)",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
 });
