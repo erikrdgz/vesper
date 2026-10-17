@@ -17,10 +17,13 @@ import {
   ActionsSheet,
   AddAssetSheet,
   AlertSheet,
+  PositionSheet,
   SendSheet,
+  ShortcutsSheet,
   SwapSheet,
 } from "./src/components/sheets";
 import { NavigationProvider, useNavigation } from "./src/hooks/useNavigation";
+import { useShortcuts } from "./src/hooks/useShortcuts";
 import { VesperProvider, useVesper } from "./src/hooks/useVesper";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
 import { AssetDetailScreen } from "./src/screens/AssetDetailScreen";
@@ -101,6 +104,8 @@ function Gate() {
       <SwapSheet />
       <AlertSheet />
       <SendSheet />
+      <PositionSheet />
+      <ShortcutsSheet />
     </View>
   );
 }
@@ -108,6 +113,7 @@ function Gate() {
 /** The router, with the tab change given a direction. */
 function Transitioned() {
   const { tab, detailId } = useNavigation();
+  useShortcuts();
   return (
     <ScreenTransition screenKey={detailId ? `detail:${detailId}` : tab}>
       <Router />

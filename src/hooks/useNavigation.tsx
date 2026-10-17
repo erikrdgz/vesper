@@ -20,6 +20,16 @@ interface NavigationValue {
   sheet: SheetId;
   openSheet: (sheet: Exclude<SheetId, null>) => void;
   closeSheet: () => void;
+  /**
+   * The position whose action menu is open.
+   *
+   * Separate from `sheet` because it carries a subject. A long press is
+   * always about a particular row, and folding that into the sheet enum
+   * would mean encoding the id in the enum value.
+   */
+  positionId: string | null;
+  openPosition: (id: string) => void;
+  closePosition: () => void;
 }
 
 const NavigationContext = createContext<NavigationValue | null>(null);
@@ -28,6 +38,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
   const [tab, setTabState] = useState<TabId>("home");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetId>(null);
+  const [positionId, setPositionId] = useState<string | null>(null);
 
   // Switching tabs always leaves the detail view. Returning to a tab and
   // finding a sub-screen still open is the kind of state that feels broken
@@ -35,6 +46,8 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
   const setTab = useCallback((next: TabId) => {
     setTabState(next);
     setDetailId(null);
+    // A row menu belongs to the screen it was opened from.
+    setPositionId(null);
   }, []);
 
   const value = useMemo<NavigationValue>(
@@ -47,8 +60,11 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
       sheet,
       openSheet: setSheet,
       closeSheet: () => setSheet(null),
+      positionId,
+      openPosition: setPositionId,
+      closePosition: () => setPositionId(null),
     }),
-    [tab, setTab, detailId, sheet],
+    [tab, setTab, detailId, sheet, positionId],
   );
 
   return <NavigationContext.Provider value={value}>{children}</NavigationContext.Provider>;

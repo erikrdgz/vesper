@@ -292,6 +292,8 @@ interface VesperContextValue extends State {
   logActivity: (kind: ActivityEntry["kind"], summary: string) => void;
   setProfile: (patch: Partial<Profile>) => void;
   finishOnboarding: (name: string, startEmpty: boolean) => void;
+  /** Swap the whole book out, for a CSV import. */
+  replaceAssets: (assets: Asset[]) => void;
   setReduceMotion: (value: boolean | null) => void;
   resetToSeed: () => Promise<void>;
 }
@@ -581,6 +583,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       setProfile: (patch) => dispatch({ type: "profile/set", patch }),
       finishOnboarding: (name, startEmpty) =>
         dispatch({ type: "onboard/finish", name, startEmpty }),
+      replaceAssets: (next) => dispatch({ type: "assets/replace", assets: next }),
       logActivity: (kind, summary) =>
         dispatch({
           type: "activity/log",

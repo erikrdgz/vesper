@@ -4,9 +4,13 @@
  * An app that will not export is an app that owns your numbers rather
  * than holds them, and Vesper's whole argument is the opposite. The
  * figures are yours and they live in your browser; this is the door.
+ *
+ * Pure on purpose. Handing the file to the browser lives in
+ * `download.ts`, because that needs `Platform` from react-native, and
+ * importing react-native here made this module unloadable in the plain
+ * node process the tests run in.
  */
 
-import { Platform } from "react-native";
 import type { NetWorth } from "../types";
 import { isDeFi } from "../types";
 
@@ -66,31 +70,4 @@ export function positionsCsv(netWorth: NetWorth): string {
   ];
 
   return [header, ...rows, totals].map((row) => row.map(cell).join(",")).join("\n");
-}
-
-/**
- * Hand the file to the browser.
- *
- * Web only, and it says so rather than pretending: a native build would
- * need the share sheet, which is a different mechanism and not one this
- * build has a reason to carry.
- */
-export function downloadCsv(filename: string, content: string): boolean {
-  if (Platform.OS !== "web") return false;
-
-  try {
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    // Revoking immediately races the download in some browsers.
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    return true;
-  } catch {
-    return false;
-  }
 }

@@ -216,7 +216,14 @@ export type ChartRange = "1H" | "1D" | "1W" | "1M" | "1Y";
 export type TabId = "home" | "analytics" | "crypto" | "watch" | "exchange" | "wallet";
 
 /** What the FAB and the command bar can open. */
-export type SheetId = "actions" | "add-asset" | "send" | "swap" | "alert" | null;
+export type SheetId =
+  | "actions"
+  | "add-asset"
+  | "send"
+  | "swap"
+  | "alert"
+  | "shortcuts"
+  | null;
 
 /**
  * A price someone is waiting for.

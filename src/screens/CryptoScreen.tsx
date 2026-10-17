@@ -24,7 +24,9 @@ import { isDeFi, type DeFiAsset, type ValuedAsset } from "../types";
 import { Column, Row, Screen } from "../components/AppShell";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { AreaChart, Sparkline } from "../components/Chart";
-import { ArrowUpRightIcon, RefreshIcon } from "../components/icons";
+import { ArrowUpRightIcon, RefreshIcon, TrashIcon, WatchIcon } from "../components/icons";
+import { SwipeRow } from "../components/SwipeRow";
+import { useToast } from "../components/Toast";
 import { Action, Delta, Divider, Tap, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
@@ -233,7 +235,9 @@ function HoldingRow({
   onSelect: () => void;
 }) {
   const asset = entry.asset as DeFiAsset;
-  const { prices } = useVesper();
+  const { prices, removeAsset } = useVesper();
+  const { openPosition, openSheet } = useNavigation();
+  const { toast } = useToast();
   const price = prices.quotes[asset.coingeckoId]?.usd ?? 0;
   const series = useAssetSeries(asset.coingeckoId, "1W", price);
   const flash = useChangeFlash(Math.round(entry.valueUsd * 100));
@@ -242,12 +246,28 @@ function HoldingRow({
   const metal = tokenColor(asset.symbol);
 
   return (
-    <Tap
+    <SwipeRow
       onPress={onSelect}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
+      onLongPress={() => openPosition(asset.id)}
       accessibilityLabel={`${asset.label}, ${usd(entry.valueUsd)}`}
-      scaleTo={0.995}
+      actions={[
+        {
+          label: "Alert",
+          tone: color.accent,
+          icon: <WatchIcon size={16} tone={color.accentInk} />,
+          onPress: () => openSheet("alert"),
+        },
+        {
+          label: "Remove",
+          tone: color.negative,
+          ink: "#2A0A05",
+          icon: <TrashIcon size={16} tone="#2A0A05" />,
+          onPress: () => {
+            removeAsset(asset.id);
+            toast(`${asset.label} removed`, "It is out of your book.");
+          },
+        },
+      ]}
     >
       <View
         style={[
@@ -279,7 +299,7 @@ function HoldingRow({
           </Txt>
         </View>
       </View>
-    </Tap>
+    </SwipeRow>
   );
 }
 

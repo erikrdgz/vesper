@@ -433,7 +433,7 @@ function Stat({ label, value, tone = "text" }: { label: string; value: string; t
 
 /** One row of the book. Flashes when its value moves. */
 function PositionRow({ entry }: { entry: ValuedAsset }) {
-  const { openAsset, setTab } = useNavigation();
+  const { openAsset, setTab, openPosition } = useNavigation();
   const flash = useChangeFlash(Math.round(entry.valueUsd * 100));
   const defi = isDeFi(entry.asset) ? (entry.asset as DeFiAsset) : null;
 
@@ -446,8 +446,9 @@ function PositionRow({ entry }: { entry: ValuedAsset }) {
   return (
     <Tap
       onPress={open}
-      disabled={!defi}
-      accessibilityRole={defi ? "button" : "text"}
+      onLongPress={() => openPosition(entry.asset.id)}
+      delayLongPress={380}
+      accessibilityRole="button"
       accessibilityLabel={`${entry.asset.label}, ${usd(entry.valueUsd)}`}
       scaleTo={0.995}
     >

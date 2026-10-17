@@ -11,13 +11,16 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { useNavigation } from "../hooks/useNavigation";
+import { SHORTCUTS } from "../hooks/useShortcuts";
+import { useNetWorth } from "../hooks/useNetWorth";
 import { useVesper } from "../hooks/useVesper";
-import { tokenAmount, usd } from "../lib/format";
+import { tokenAmount, usd, usdSigned } from "../lib/format";
 import { SWAP_FEE_BPS, SWAP_MESSAGE, quoteSwap } from "../lib/exchange";
 import { TOKEN_CATALOG, catalogById, type CatalogEntry } from "../data/catalog";
 import { color, space } from "../theme";
 import { isDeFi, isTradFi, type Asset, type TradFiKind } from "../types";
 import { ChoiceRow, Field } from "./Field";
+import { CoinMark } from "./coins";
 import { ChevronRightIcon } from "./icons";
 import { Action, Divider, Txt } from "./primitives";
 import { Sheet } from "./Sheet";
@@ -343,6 +346,26 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: space.sm,
   },
+  shortcutRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+  },
+  key: {
+    minWidth: 38,
+    alignItems: "center",
+    paddingHorizontal: space.xs,
+    paddingVertical: space.xxs,
+    borderRadius: 6,
+    backgroundColor: color.well,
+    borderWidth: 1,
+    borderColor: color.hairlineStrong,
+  },
+  positionHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+  },
   balanceNote: {
     flexDirection: "row",
     alignItems: "center",
@@ -626,6 +649,139 @@ export function AlertSheet() {
 
       <Divider style={{ marginVertical: space.xs }} />
       <Action label="Arm the alert" variant="primary" onPress={submit} />
+    </Sheet>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * What a long press on a position offers.
+ *
+ * Swiping reveals the two destructive-ish actions because those are the
+ * ones worth a deliberate gesture. Everything else lives here, where
+ * there is room to name it and show what it would act on.
+ */
+export function PositionSheet() {
+  const { positionId, closePosition, setTab, openAsset, openSheet } = useNavigation();
+  const { assets, removeAsset, toggleWatch, watchlist } = useVesper();
+  const netWorth = useNetWorth();
+  const { toast } = useToast();
+
+  const asset = assets.find((candidate) => candidate.id === positionId);
+  const valued = netWorth.valued.find((entry) => entry.asset.id === positionId);
+  const defi = asset && isDeFi(asset) ? asset : null;
+  const following = defi ? watchlist.includes(defi.coingeckoId) : false;
+
+  if (!asset || !valued) {
+    return <Sheet open={false} onClose={closePosition} title="" children={null} />;
+  }
+
+  const actions: { title: string; detail: string; onPress: () => void; danger?: boolean }[] = [];
+
+  if (defi) {
+    actions.push(
+      {
+        title: "Open detail",
+        detail: "Charts, ranges and the full position",
+        onPress: () => {
+          setTab("crypto");
+          openAsset(asset.id);
+        },
+      },
+      {
+        title: "Swap this",
+        detail: "Convert it into another holding",
+        onPress: () => setTab("exchange"),
+      },
+      {
+        title: "Set a price alert",
+        detail: `Get told when ${defi.symbol} crosses a price`,
+        onPress: () => openSheet("alert"),
+      },
+      {
+        title: following ? "Stop following" : "Follow in the bar",
+        detail: following ? "Remove it from the watch bar" : "Pin it to the top of every screen",
+        onPress: () => {
+          toggleWatch(defi.coingeckoId);
+          toast(following ? `Unfollowed ${defi.label}` : `Following ${defi.label}`);
+        },
+      },
+    );
+  }
+
+  actions.push({
+    title: "Remove from book",
+    detail: "It stops counting toward your net worth",
+    danger: true,
+    onPress: () => {
+      removeAsset(asset.id);
+      toast(`${asset.label} removed`, "It is out of your book.");
+    },
+  });
+
+  return (
+    <Sheet open={positionId !== null} onClose={closePosition} title={asset.label}>
+      <View style={styles.positionHead}>
+        {defi && <CoinMark symbol={defi.symbol} size={32} />}
+        <View style={{ flex: 1 }}>
+          <Txt variant="h2">{usd(valued.valueUsd)}</Txt>
+          <Txt variant="caption" tone="textMuted">
+            {defi ? tokenAmount(defi.amount, defi.symbol) : "Stated balance"}
+            {valued.gainPct === null ? "" : ` · ${usdSigned(valued.gainUsd ?? 0)} since bought`}
+          </Txt>
+        </View>
+      </View>
+
+      <Divider />
+
+      {actions.map((action) => (
+        <Pressable
+          key={action.title}
+          onPress={() => {
+            action.onPress();
+            closePosition();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={action.title}
+          style={styles.option}
+        >
+          <View style={{ flex: 1 }}>
+            <Txt variant="bodyStrong" tone={action.danger ? "negative" : "text"}>
+              {action.title}
+            </Txt>
+            <Txt variant="caption" tone="textMuted">
+              {action.detail}
+            </Txt>
+          </View>
+          <ChevronRightIcon size={16} tone={color.textMuted} />
+        </Pressable>
+      ))}
+    </Sheet>
+  );
+}
+
+/** The keyboard shortcut list, opened with "/". */
+export function ShortcutsSheet() {
+  const { sheet, closeSheet } = useNavigation();
+
+  return (
+    <Sheet open={sheet === "shortcuts"} onClose={closeSheet} title="Keyboard">
+      {SHORTCUTS.map((shortcut) => (
+        <View key={shortcut.keys} style={styles.shortcutRow}>
+          <View style={styles.key}>
+            <Txt variant="micro" tone="text">
+              {shortcut.keys}
+            </Txt>
+          </View>
+          <Txt variant="body" tone="textSecondary" style={{ flex: 1 }}>
+            {shortcut.does}
+          </Txt>
+        </View>
+      ))}
+      <Txt variant="caption" tone="textMuted">
+        Single letters, no modifier. They are ignored while you are typing in a field.
+      </Txt>
     </Sheet>
   );
 }

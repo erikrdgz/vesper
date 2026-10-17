@@ -18,7 +18,10 @@ import { useNavigation } from "../hooks/useNavigation";
 import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
 import { plural, relativeTime, transactionDate, usd, usdSigned } from "../lib/format";
-import { downloadCsv, positionsCsv } from "../lib/exportCsv";
+import { downloadCsv, pickCsv } from "../lib/download";
+import { parsePositions, type ImportResult } from "../lib/importCsv";
+import { useToast } from "../components/Toast";
+import { positionsCsv } from "../lib/exportCsv";
 import { color, radius, space } from "../theme";
 import { isDeFi } from "../types";
 import { TOKEN_CATALOG } from "../data/catalog";
@@ -48,13 +51,17 @@ export function WalletScreen() {
     profile,
     setProfile,
     realisedUsd,
+    replaceAssets,
+    logActivity,
   } = useVesper();
+  const { toast } = useToast();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
   const { openSheet, setTab, openAsset } = useNavigation();
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [exported, setExported] = useState(false);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<ImportResult | null>(null);
 
   const holdings = useMemo(() => {
     const cards = netWorth.valued.filter((entry) => isDeFi(entry.asset));
@@ -289,6 +296,57 @@ export function WalletScreen() {
                 setExported(ok);
               }}
             />
+
+            {pendingImport ? (
+              <>
+                <Txt variant="caption" tone="negative">
+                  Replace your {plural(assets.length, "position")} with the{" "}
+                  {plural(pendingImport.assets.length, "position")} in that file? There is no undo.
+                </Txt>
+                {pendingImport.skipped.length > 0 && (
+                  <Txt variant="caption" tone="textMuted">
+                    {plural(pendingImport.skipped.length, "row")} will be left out:{" "}
+                    {pendingImport.skipped.slice(0, 2).join(" ")}
+                  </Txt>
+                )}
+                <Action
+                  label="Replace the book"
+                  variant="primary"
+                  onPress={() => {
+                    replaceAssets(pendingImport.assets);
+                    logActivity(
+                      "edit",
+                      `Imported ${plural(pendingImport.assets.length, "position")} from a file`,
+                    );
+                    toast(
+                      "Book replaced",
+                      `${plural(pendingImport.assets.length, "position")} imported`,
+                      "positive",
+                    );
+                    setPendingImport(null);
+                  }}
+                />
+                <Action label="Cancel" onPress={() => setPendingImport(null)} />
+              </>
+            ) : (
+              <Action
+                label="Import positions from CSV"
+                onPress={async () => {
+                  const text = await pickCsv();
+                  if (text === null) return; // cancelled, which is not an error
+                  const result = parsePositions(text);
+                  if (result.assets.length === 0) {
+                    toast(
+                      "Nothing to import",
+                      result.skipped[0] ?? "No rows in that file matched.",
+                      "negative",
+                    );
+                    return;
+                  }
+                  setPendingImport(result);
+                }}
+              />
+            )}
           </Pane>
 
           <Pane title="Stored data">
