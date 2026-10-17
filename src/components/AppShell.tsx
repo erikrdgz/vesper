@@ -26,6 +26,7 @@ import {
   HomeIcon,
   PlusIcon,
   SettingsIcon,
+  WatchIcon,
   type IconProps,
 } from "./icons";
 import { CommandBar, Grid, Watchlist } from "./terminal";
@@ -47,8 +48,18 @@ const TABS: {
   { id: "home", label: "Overview", short: "Home", Icon: HomeIcon },
   { id: "analytics", label: "Analytics", short: "Charts", Icon: AnalyticsIcon },
   { id: "crypto", label: "Crypto", short: "Crypto", Icon: CryptoIcon },
+  { id: "watch", label: "Watch", short: "Watch", Icon: WatchIcon },
   { id: "settings", label: "Settings", short: "You", Icon: SettingsIcon },
 ];
+
+/**
+ * The bottom bar carries four of the five.
+ *
+ * Five labels plus the raised button do not fit across a phone, and
+ * Settings is the one you reach for least and can reach from the
+ * profile anyway.
+ */
+const MOBILE_TABS = TABS.filter((tab) => tab.id !== "settings");
 
 /* ------------------------------------------------------------------ */
 /* Screen scaffolding                                                  */
@@ -109,8 +120,8 @@ export function Column({ children, flex }: { children: React.ReactNode; flex?: n
 
 function TabBar() {
   const { tab, setTab, openSheet } = useNavigation();
-  const left = TABS.slice(0, 2);
-  const right = TABS.slice(2);
+  const left = MOBILE_TABS.slice(0, 2);
+  const right = MOBILE_TABS.slice(2);
 
   return (
     <View style={styles.tabBar} accessibilityRole="tablist" accessibilityLabel="Sections">
@@ -127,9 +138,9 @@ function TabBar() {
       ))}
 
       <Pressable
-        onPress={() => openSheet("add-asset")}
+        onPress={() => openSheet("actions")}
         accessibilityRole="button"
-        accessibilityLabel="Add an asset"
+        accessibilityLabel="Add, swap or set an alert"
         style={[styles.fab, shadow.glow]}
       >
         <PlusIcon size={24} tone={color.accentInk} strokeWidth={2.25} />
@@ -217,6 +228,8 @@ const styles = StyleSheet.create({
   },
   desktopBody: {
     flex: 1,
+    paddingHorizontal: layout.paneInset,
+    paddingBottom: layout.paneInset,
   },
   desktopScreen: {
     flex: 1,
@@ -225,6 +238,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mobileContent: {
+    paddingHorizontal: layout.paneInset,
     paddingBottom: layout.tabBarHeight + space.xxl,
   },
 

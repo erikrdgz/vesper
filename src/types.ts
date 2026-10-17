@@ -38,6 +38,14 @@ export interface TradFiAsset {
   label: string;
   /** Stated value in USD. Always positive, including for `credit`. */
   balanceUsd: number;
+  /**
+   * What was paid in, for accounts where that is a meaningful question.
+   *
+   * Brokerage and retirement accounts have one; cash and credit do not,
+   * because "what did you pay for your checking balance" is nonsense.
+   * Undefined means untracked, which is different from zero.
+   */
+  costBasisUsd?: number;
   /** Optional: last four digits, for the account-card treatment. */
   mask?: string;
 }
@@ -57,6 +65,14 @@ export interface DeFiAsset {
   label: string;
   /** Token quantity held. The one persisted number. */
   amount: number;
+  /**
+   * Total USD paid for the current `amount`.
+   *
+   * Held as a total rather than a per-unit average so that adding to a
+   * position is a sum rather than a weighted mean recomputed from a
+   * running average that drifts. Undefined means untracked.
+   */
+  costBasisUsd?: number;
   /** CoinGecko's id for `/simple/price`, e.g. "bitcoin". */
   coingeckoId: string;
 }
@@ -108,6 +124,12 @@ export interface ValuedAsset {
   change24hUsd: number;
   /** 24h change as a percentage. Zero for TradFi. */
   change24hPct: number;
+  /** What was paid, or null where no basis is recorded. */
+  costUsd: number | null;
+  /** Value minus cost. Null when there is no basis to compare against. */
+  gainUsd: number | null;
+  /** Gain as a percentage of cost. Null when cost is absent or zero. */
+  gainPct: number | null;
   /**
    * False when a DeFi asset has no quote in the current map, which happens
    * if someone adds a token by an id CoinGecko does not know. Such an asset
@@ -130,6 +152,18 @@ export interface NetWorth {
   /** Movement over 24h, which only the DeFi half can produce. */
   change24hUsd: number;
   change24hPct: number;
+  /**
+   * Cost and return across positions that record a basis.
+   *
+   * Deliberately not across the whole book: a checking account has no
+   * cost, and folding it in at zero would understate the return on
+   * everything that does.
+   */
+  costUsd: number;
+  gainUsd: number;
+  gainPct: number;
+  /** Value of the positions the return above is calculated over. */
+  trackedValueUsd: number;
   /** Every asset, valued and weighted, sorted by value descending. */
   valued: ValuedAsset[];
 }
@@ -164,19 +198,51 @@ export interface SeriesPoint {
 export type ChartRange = "1H" | "1D" | "1W" | "1M" | "1Y";
 
 /** Top-level navigation. The FAB is not a tab; it opens a sheet. */
-export type TabId = "home" | "analytics" | "crypto" | "settings";
+export type TabId = "home" | "analytics" | "crypto" | "watch" | "settings";
 
-/** What the FAB can open. */
-export type SheetId = "add-asset" | "send" | null;
+/** What the FAB and the command bar can open. */
+export type SheetId = "actions" | "add-asset" | "send" | "swap" | "alert" | null;
+
+/**
+ * A price someone is waiting for.
+ *
+ * `triggeredAt` is what stops an alert firing on every poll once it is
+ * crossed: an alert is a doorbell, not a siren.
+ */
+export interface PriceAlert {
+  id: string;
+  coingeckoId: string;
+  symbol: string;
+  direction: "above" | "below";
+  priceUsd: number;
+  triggeredAt: number | null;
+}
+
+/**
+ * Something that happened in the book.
+ *
+ * Distinct from `Transaction`, which is money moving. This is a record
+ * of edits — what was added, swapped, removed — so a portfolio that
+ * changed under you has somewhere to explain itself.
+ */
+export interface ActivityEntry {
+  id: string;
+  /** ISO 8601. */
+  at: string;
+  kind: "swap" | "add" | "remove" | "edit" | "transfer" | "alert";
+  summary: string;
+}
 
 /** Everything Vesper persists. Versioned so a schema change can migrate. */
 export interface PersistedState {
-  version: 1;
+  version: 2;
   assets: Asset[];
   /** Seeded, plus anything added through the send sheet. */
   transactions: Transaction[];
   /** CoinGecko ids being followed, held or not. */
   watchlist: string[];
+  alerts: PriceAlert[];
+  activity: ActivityEntry[];
   /** Last good quote set, for the `cached` price source. */
   quotes: QuoteMap | null;
   quotesFetchedAt: number | null;

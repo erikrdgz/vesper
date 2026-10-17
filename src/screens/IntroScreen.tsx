@@ -1,11 +1,11 @@
 /**
  * The way in.
  *
- * The prism assembles, the name sets itself a letter at a time, a rule
- * draws under it, and then the way in appears. It reuses the same 3D
- * object the Crypto tab uses rather than animating a separate splash
- * graphic, so the first thing you see is the thing you will be looking at
- * for the rest of the session.
+ * The two strokes of the mark fall in and converge on the vertex, the
+ * name sets itself a letter at a time, a rule draws under it, and then
+ * the way in appears. The motion is the shape's own: a V already reads
+ * as two things meeting, so the entrance is that meeting rather than a
+ * spin or a fade borrowed from somewhere else.
  *
  * It waits for a click rather than timing out. A splash that dismisses
  * itself is an obstacle; one that waits is a door.
@@ -16,27 +16,30 @@ import { Animated, Pressable, StyleSheet, View } from "react-native";
 
 import { useVesper } from "../hooks/useVesper";
 import { color, duration, ease, nativeDriver, radius, space, type } from "../theme";
-import { TokenObject } from "../components/TokenObject";
+import { VesperStroke } from "../components/brand";
 import { Txt } from "../components/primitives";
 
 const LETTERS = "VESPER".split("");
+const MARK = 148;
 
 /** When each beat starts, in ms. */
 const CUE = {
-  prism: 0,
-  letters: 320,
-  rule: 980,
-  tagline: 1180,
-  enter: 1480,
+  left: 0,
+  right: 140,
+  letters: 700,
+  rule: 1280,
+  tagline: 1460,
+  enter: 1700,
 };
 
 export function IntroScreen({ onEnter }: { onEnter: () => void }) {
   const { reduceMotion } = useVesper();
   const [leaving, setLeaving] = useState(false);
 
-  // One value per beat, so the sequence is legible as a list rather than
-  // buried in a chain of callbacks.
-  const prism = useRef(new Animated.Value(0)).current;
+  // One value per beat, so the sequence reads as a list rather than a
+  // chain of callbacks.
+  const left = useRef(new Animated.Value(0)).current;
+  const right = useRef(new Animated.Value(0)).current;
   const letters = useRef(LETTERS.map(() => new Animated.Value(0))).current;
   const rule = useRef(new Animated.Value(0)).current;
   const tagline = useRef(new Animated.Value(0)).current;
@@ -45,11 +48,7 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
 
   useEffect(() => {
     if (reduceMotion) {
-      prism.setValue(1);
-      letters.forEach((value) => value.setValue(1));
-      rule.setValue(1);
-      tagline.setValue(1);
-      enter.setValue(1);
+      [left, right, rule, tagline, enter, ...letters].forEach((v) => v.setValue(1));
       return;
     }
 
@@ -63,7 +62,21 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
       });
 
     const animation = Animated.parallel([
-      beat(prism, CUE.prism, duration.rise * 1.6),
+      // The dramatic curve, used on exactly the two elements that earn
+      // it: a long hold, a decisive fall, a long settle.
+      Animated.timing(left, {
+        toValue: 1,
+        duration: duration.rise * 1.5,
+        easing: ease.dramatic,
+        useNativeDriver: nativeDriver,
+      }),
+      Animated.timing(right, {
+        toValue: 1,
+        delay: CUE.right,
+        duration: duration.rise * 1.5,
+        easing: ease.dramatic,
+        useNativeDriver: nativeDriver,
+      }),
       ...letters.map((value, index) => beat(value, CUE.letters + index * 70, duration.medium)),
       beat(rule, CUE.rule, duration.rise),
       beat(tagline, CUE.tagline),
@@ -72,7 +85,7 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
 
     animation.start();
     return () => animation.stop();
-  }, [reduceMotion, prism, letters, rule, tagline, enter]);
+  }, [reduceMotion, left, right, letters, rule, tagline, enter]);
 
   function handleEnter() {
     if (leaving) return;
@@ -92,8 +105,14 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
     }).start(onEnter);
   }
 
-  const leaveOpacity = exit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const leaveScale = exit.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
+  /** Each stroke falls from above and slides in from its own side. */
+  const strokeStyle = (value: Animated.Value, fromX: number) => ({
+    opacity: value,
+    transform: [
+      { translateY: value.interpolate({ inputRange: [0, 1], outputRange: [-46, 0] }) },
+      { translateX: value.interpolate({ inputRange: [0, 1], outputRange: [fromX, 0] }) },
+    ],
+  });
 
   return (
     <Pressable
@@ -105,19 +124,22 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
       <Animated.View
         style={[
           styles.stage,
-          { opacity: leaveOpacity, transform: [{ scale: leaveScale }] },
+          {
+            opacity: exit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+            transform: [
+              { scale: exit.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
+            ],
+          },
         ]}
       >
-        <Animated.View
-          style={{
-            opacity: prism,
-            transform: [
-              { scale: prism.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }) },
-            ],
-          }}
-        >
-          <TokenObject symbol="VESPER" flipIndex={0} height={300} distance={8.2} />
-        </Animated.View>
+        <View style={styles.mark}>
+          <Animated.View style={[styles.stroke, strokeStyle(left, -22)]}>
+            <VesperStroke side="left" size={MARK} />
+          </Animated.View>
+          <Animated.View style={[styles.stroke, strokeStyle(right, 22)]}>
+            <VesperStroke side="right" size={MARK} />
+          </Animated.View>
+        </View>
 
         <View style={styles.word}>
           {LETTERS.map((letter, index) => (
@@ -143,12 +165,7 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
           ))}
         </View>
 
-        <Animated.View
-          style={[
-            styles.rule,
-            { transform: [{ scaleX: rule }] },
-          ]}
-        />
+        <Animated.View style={[styles.rule, { transform: [{ scaleX: rule }] }]} />
 
         <Animated.View style={{ opacity: tagline }}>
           <Txt variant="caption" tone="textSecondary" style={styles.tagline}>
@@ -187,11 +204,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     maxWidth: 420,
-    gap: space.sm,
+  },
+  mark: {
+    width: MARK,
+    height: MARK,
+  },
+  stroke: {
+    // Stacked: the two strokes share the vertex, so they have to sit in
+    // exactly the same box or the join opens up mid-animation.
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   word: {
     flexDirection: "row",
-    marginTop: space.xs,
+    marginTop: space.lg,
   },
   letter: {
     ...(type.h1 as object),
@@ -204,7 +233,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 1,
     backgroundColor: color.hairlineStrong,
-    marginVertical: space.sm,
+    marginVertical: space.md,
   },
   tagline: {
     textAlign: "center",

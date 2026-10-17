@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   chartFill: {
     flex: 1,
     minHeight: 140,
-    marginHorizontal: -space.md,
+    marginHorizontal: -space.sm,
   },
   barsFill: {
     flex: 1,

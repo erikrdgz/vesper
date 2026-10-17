@@ -24,10 +24,19 @@ import React, {
 import { AccessibilityInfo } from "react-native";
 
 import { AUTO_REFRESH_MS, MIN_REFRESH_MS, PriceError, fetchQuotes } from "../data/prices";
-import { seedWatchlist } from "../data/catalog";
+import { TOKEN_CATALOG, seedWatchlist } from "../data/catalog";
 import { fallbackQuotes, seedAssets, seedTransactions } from "../data/seed";
 import { clearState, loadState, saveState } from "../data/storage";
-import { isDeFi, type Asset, type PriceState, type QuoteMap, type Transaction } from "../types";
+import { applySwap, quoteSwap, type SwapError } from "../lib/exchange";
+import {
+  isDeFi,
+  type ActivityEntry,
+  type Asset,
+  type PriceAlert,
+  type PriceState,
+  type QuoteMap,
+  type Transaction,
+} from "../types";
 
 interface State {
   hydrated: boolean;
@@ -35,6 +44,8 @@ interface State {
   transactions: Transaction[];
   /** CoinGecko ids being followed, held or not. */
   watchlist: string[];
+  alerts: PriceAlert[];
+  activity: ActivityEntry[];
   prices: PriceState;
   /** null means "follow the OS". */
   reduceMotionOverride: boolean | null;
@@ -47,6 +58,8 @@ type Action =
       assets: Asset[];
       transactions: Transaction[];
       watchlist: string[];
+      alerts: PriceAlert[];
+      activity: ActivityEntry[];
       quotes: QuoteMap | null;
       fetchedAt: number | null;
       reduceMotion: boolean | null;
@@ -59,6 +72,11 @@ type Action =
   | { type: "asset/remove"; id: string }
   | { type: "transaction/add"; transaction: Transaction }
   | { type: "watch/toggle"; coingeckoId: string }
+  | { type: "assets/replace"; assets: Asset[] }
+  | { type: "alert/add"; alert: PriceAlert }
+  | { type: "alert/remove"; id: string }
+  | { type: "alert/trigger"; id: string; at: number }
+  | { type: "activity/log"; entry: ActivityEntry }
   | { type: "reduceMotion/set"; value: boolean | null }
   | { type: "systemReduceMotion"; value: boolean }
   | { type: "reset" };
@@ -68,6 +86,8 @@ const initialState: State = {
   assets: seedAssets,
   transactions: seedTransactions,
   watchlist: seedWatchlist,
+  alerts: [],
+  activity: [],
   prices: {
     quotes: fallbackQuotes,
     source: "fallback",
@@ -89,6 +109,8 @@ function reducer(state: State, action: Action): State {
         assets: action.assets,
         transactions: action.transactions,
         watchlist: action.watchlist,
+        alerts: action.alerts,
+        activity: action.activity,
         reduceMotionOverride: action.reduceMotion,
         prices: hasCache
           ? {
@@ -141,6 +163,28 @@ function reducer(state: State, action: Action): State {
     case "transaction/add":
       return { ...state, transactions: [action.transaction, ...state.transactions] };
 
+    case "assets/replace":
+      return { ...state, assets: action.assets };
+
+    case "alert/add":
+      return { ...state, alerts: [action.alert, ...state.alerts] };
+
+    case "alert/remove":
+      return { ...state, alerts: state.alerts.filter((alert) => alert.id !== action.id) };
+
+    case "alert/trigger":
+      return {
+        ...state,
+        alerts: state.alerts.map((alert) =>
+          alert.id === action.id ? { ...alert, triggeredAt: action.at } : alert,
+        ),
+      };
+
+    case "activity/log":
+      // Capped: an unbounded log is a memory leak with a nice name, and
+      // nobody scrolls past fifty entries of their own edits.
+      return { ...state, activity: [action.entry, ...state.activity].slice(0, 50) };
+
     case "watch/toggle":
       return {
         ...state,
@@ -172,6 +216,10 @@ interface VesperContextValue extends State {
   removeAsset: (id: string) => void;
   addTransaction: (transaction: Transaction) => void;
   toggleWatch: (coingeckoId: string) => void;
+  swap: (fromId: string, toId: string, amount: number) => { ok: true } | { ok: false; error: SwapError };
+  addAlert: (alert: Omit<PriceAlert, "id" | "triggeredAt">) => void;
+  removeAlert: (id: string) => void;
+  logActivity: (kind: ActivityEntry["kind"], summary: string) => void;
   setReduceMotion: (value: boolean | null) => void;
   resetToSeed: () => Promise<void>;
 }
@@ -194,6 +242,8 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       dispatch({
         type: "hydrated",
         assets: persisted?.assets ?? seedAssets,
+        alerts: persisted?.alerts ?? [],
+        activity: persisted?.activity ?? [],
         transactions: persisted?.transactions ?? seedTransactions,
         watchlist: persisted?.watchlist?.length ? persisted.watchlist : seedWatchlist,
         quotes: persisted?.quotes ?? null,
@@ -211,10 +261,12 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!state.hydrated) return; // never write the seed over a real save
     saveState({
-      version: 1,
+      version: 2,
       assets: state.assets,
       transactions: state.transactions,
       watchlist: state.watchlist,
+      alerts: state.alerts,
+      activity: state.activity,
       quotes: state.prices.source === "fallback" ? null : state.prices.quotes,
       quotesFetchedAt: state.prices.fetchedAt,
       reduceMotion: state.reduceMotionOverride,
@@ -224,6 +276,8 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
     state.assets,
     state.transactions,
     state.watchlist,
+    state.alerts,
+    state.activity,
     state.prices.quotes,
     state.prices.source,
     state.prices.fetchedAt,
@@ -233,16 +287,19 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
   /* --- prices ------------------------------------------------------ */
 
   /**
-   * Every id that needs a price: holdings and watchlist together.
+   * Every id we might need a price for — the whole catalogue.
    *
-   * CoinGecko charges by request, not by id, so folding the watchlist
-   * into the same `/simple/price` call makes following six extra tokens
-   * free rather than six more chances to trip the rate limit.
+   * CoinGecko charges by request, not by id, so asking for eight costs
+   * exactly what asking for four costs. Narrowing it to holdings and
+   * the watchlist saved nothing and meant the Watch tab showed a dash
+   * next to every token you had not followed yet, which looked broken
+   * and was really just a list we had declined to ask about.
    */
   const coingeckoIds = useMemo(
     () =>
       Array.from(
         new Set([
+          ...TOKEN_CATALOG.map((entry) => entry.coingeckoId),
           ...state.assets.filter(isDeFi).map((asset) => asset.coingeckoId),
           ...state.watchlist,
         ]),
@@ -297,6 +354,52 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.hydrated, refreshPrices]);
 
+  /* --- alerts ------------------------------------------------------ */
+
+  /**
+   * Check armed alerts whenever prices move.
+   *
+   * Fires once and then stays triggered. A notification is attempted but
+   * never required: permission may be denied, the API may not exist on
+   * this platform, and an alert that only lights up in the UI is still
+   * an alert.
+   */
+  useEffect(() => {
+    if (!state.hydrated) return;
+
+    for (const alert of state.alerts) {
+      if (alert.triggeredAt !== null) continue;
+      const price = state.prices.quotes[alert.coingeckoId]?.usd;
+      if (price === undefined) continue;
+
+      const crossed =
+        alert.direction === "above" ? price >= alert.priceUsd : price <= alert.priceUsd;
+      if (!crossed) continue;
+
+      dispatch({ type: "alert/trigger", id: alert.id, at: Date.now() });
+      dispatch({
+        type: "activity/log",
+        entry: {
+          id: `ac-${Date.now()}-${alert.id}`,
+          at: new Date().toISOString(),
+          kind: "alert",
+          summary: `${alert.symbol} went ${alert.direction} $${alert.priceUsd.toLocaleString()}`,
+        },
+      });
+
+      try {
+        const N = (globalThis as { Notification?: typeof Notification }).Notification;
+        if (N && N.permission === "granted") {
+          new N(`${alert.symbol} ${alert.direction} $${alert.priceUsd.toLocaleString()}`, {
+            body: `Now $${price.toLocaleString()}`,
+          });
+        }
+      } catch {
+        // No notifications here. The UI still shows it as triggered.
+      }
+    }
+  }, [state.hydrated, state.alerts, state.prices.quotes]);
+
   /* --- reduced motion ---------------------------------------------- */
 
   useEffect(() => {
@@ -325,6 +428,46 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       removeAsset: (id) => dispatch({ type: "asset/remove", id }),
       addTransaction: (transaction) => dispatch({ type: "transaction/add", transaction }),
       toggleWatch: (coingeckoId) => dispatch({ type: "watch/toggle", coingeckoId }),
+
+      /**
+       * Price it, apply it, log it — in that order, so a swap that
+       * cannot be priced never touches the book.
+       */
+      swap: (fromId, toId, amount) => {
+        const priced = quoteSwap(state.assets, fromId, toId, amount, state.prices.quotes);
+        if (!priced.ok) return priced;
+
+        const from = state.assets.find((asset) => asset.id === fromId);
+        const to = state.assets.find((asset) => asset.id === toId);
+        dispatch({
+          type: "assets/replace",
+          assets: applySwap(state.assets, fromId, toId, amount, priced.quote),
+        });
+        dispatch({
+          type: "activity/log",
+          entry: {
+            id: `ac-${Date.now()}`,
+            at: new Date().toISOString(),
+            kind: "swap",
+            summary:
+              `Swapped ${amount} ${from && isDeFi(from) ? from.symbol : "?"} for ` +
+              `${priced.quote.toAmount.toFixed(4)} ${to && isDeFi(to) ? to.symbol : "?"}`,
+          },
+        });
+        return { ok: true };
+      },
+
+      addAlert: (alert) =>
+        dispatch({
+          type: "alert/add",
+          alert: { ...alert, id: `al-${Date.now()}`, triggeredAt: null },
+        }),
+      removeAlert: (id) => dispatch({ type: "alert/remove", id }),
+      logActivity: (kind, summary) =>
+        dispatch({
+          type: "activity/log",
+          entry: { id: `ac-${Date.now()}`, at: new Date().toISOString(), kind, summary },
+        }),
       setReduceMotion: (v) => dispatch({ type: "reduceMotion/set", value: v }),
       resetToSeed: async () => {
         await clearState();

@@ -8,6 +8,10 @@
  * with an awkward balance, a credit card carrying something, a retirement
  * account that dwarfs everything else, and four tokens in sizes a person
  * would actually hold.
+ *
+ * The cost bases are set so the book shows a mixed result rather than a
+ * uniformly green one. A demo portfolio where every position is up is a
+ * tell that nobody thought about it.
  */
 
 import type { Asset, QuoteMap, Transaction } from "../types";
@@ -38,6 +42,7 @@ export const seedAssets: Asset[] = [
     institution: "Vanguard",
     label: "Vanguard Total Market",
     balanceUsd: 12000,
+    costBasisUsd: 9400,
   },
   {
     id: "tf-fidelity-401k",
@@ -46,6 +51,7 @@ export const seedAssets: Asset[] = [
     institution: "Fidelity",
     label: "Fidelity 401(k)",
     balanceUsd: 63250.18,
+    costBasisUsd: 51800,
   },
   {
     id: "tf-sapphire",
@@ -63,6 +69,7 @@ export const seedAssets: Asset[] = [
     label: "Bitcoin",
     amount: 0.42,
     coingeckoId: "bitcoin",
+    costBasisUsd: 24180,
   },
   {
     id: "df-eth",
@@ -71,6 +78,7 @@ export const seedAssets: Asset[] = [
     label: "Ethereum",
     amount: 3.15,
     coingeckoId: "ethereum",
+    costBasisUsd: 8260,
   },
   {
     id: "df-sol",
@@ -79,6 +87,7 @@ export const seedAssets: Asset[] = [
     label: "Solana",
     amount: 48.2,
     coingeckoId: "solana",
+    costBasisUsd: 3900,
   },
   {
     id: "df-link",
@@ -87,6 +96,7 @@ export const seedAssets: Asset[] = [
     label: "Chainlink",
     amount: 320,
     coingeckoId: "chainlink",
+    costBasisUsd: 4480,
   },
 ];
 

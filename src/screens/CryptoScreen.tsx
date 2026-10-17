@@ -193,9 +193,15 @@ function SelectedDetail({ entry }: { entry: ValuedAsset }) {
           <Txt variant="mono" tone={entry.change24hPct >= 0 ? "positive" : "negative"}>
             {entry.change24hPct >= 0 ? "▲" : "▼"} {pct(entry.change24hPct).replace(/[+−]/, "")}
           </Txt>
-          <Txt variant="micro" tone="textMuted">
-            {weight(entry.weight)} of book
-          </Txt>
+          {entry.gainPct === null ? (
+            <Txt variant="micro" tone="textMuted">
+              {weight(entry.weight)} of book
+            </Txt>
+          ) : (
+            <Txt variant="micro" tone={entry.gainUsd! >= 0 ? "positive" : "negative"}>
+              {usdSigned(entry.gainUsd ?? 0)} ({pct(entry.gainPct)})
+            </Txt>
+          )}
         </View>
       </View>
 
@@ -329,7 +335,7 @@ const styles = StyleSheet.create({
   selectedChart: {
     flex: 1,
     minHeight: 70,
-    marginHorizontal: -space.md,
-    marginBottom: -space.md,
+    marginHorizontal: -space.sm,
+    marginBottom: -space.xs,
   },
 });

@@ -26,7 +26,17 @@ export function computeNetWorth(assets: Asset[], quotes: QuoteMap): NetWorth {
     if (isDeFi(asset)) {
       const quote = quotes[asset.coingeckoId];
       if (!quote) {
-        return { asset, valueUsd: 0, weight: 0, change24hUsd: 0, change24hPct: 0, priced: false };
+        return {
+          asset,
+          valueUsd: 0,
+          weight: 0,
+          change24hUsd: 0,
+          change24hPct: 0,
+          priced: false,
+          costUsd: asset.costBasisUsd ?? null,
+          gainUsd: null,
+          gainPct: null,
+        };
       }
 
       const valueUsd = asset.amount * quote.usd;
@@ -43,17 +53,23 @@ export function computeNetWorth(assets: Asset[], quotes: QuoteMap): NetWorth {
         change24hUsd,
         change24hPct: quote.change24h,
         priced: true,
+        ...gainOn(valueUsd, asset.costBasisUsd),
       };
     }
 
     const owed = asset.kind === "credit";
+    const valueUsd = owed ? -asset.balanceUsd : asset.balanceUsd;
     return {
       asset,
-      valueUsd: owed ? -asset.balanceUsd : asset.balanceUsd,
+      valueUsd,
       weight: 0,
       change24hUsd: 0,
       change24hPct: 0,
       priced: true,
+      // A liability has no cost basis, whatever is stored on it.
+      ...(owed
+        ? { costUsd: null, gainUsd: null, gainPct: null }
+        : gainOn(valueUsd, asset.costBasisUsd)),
     };
   });
 
@@ -61,8 +77,18 @@ export function computeNetWorth(assets: Asset[], quotes: QuoteMap): NetWorth {
   let deFiUsd = 0;
   let liabilitiesUsd = 0;
   let change24hUsd = 0;
+  let costUsd = 0;
+  let trackedValueUsd = 0;
 
   for (const entry of valued) {
+    // Only positions with a recorded basis count toward the return, so a
+    // cash balance cannot dilute the number by contributing value at
+    // zero cost.
+    if (entry.costUsd !== null) {
+      costUsd += entry.costUsd;
+      trackedValueUsd += entry.valueUsd;
+    }
+
     if (isDeFi(entry.asset)) {
       deFiUsd += entry.valueUsd;
       change24hUsd += entry.change24hUsd;
@@ -88,5 +114,38 @@ export function computeNetWorth(assets: Asset[], quotes: QuoteMap): NetWorth {
 
   valued.sort((a, b) => b.valueUsd - a.valueUsd);
 
-  return { totalUsd, tradFiUsd, deFiUsd, liabilitiesUsd, change24hUsd, change24hPct, valued };
+  const gainUsd = trackedValueUsd - costUsd;
+  const gainPct = costUsd > 0 ? (gainUsd / costUsd) * 100 : 0;
+
+  return {
+    totalUsd,
+    tradFiUsd,
+    deFiUsd,
+    liabilitiesUsd,
+    change24hUsd,
+    change24hPct,
+    costUsd,
+    gainUsd,
+    gainPct,
+    trackedValueUsd,
+    valued,
+  };
+}
+
+/**
+ * Gain against a basis, or nulls when there is no basis.
+ *
+ * A basis of zero is treated as untracked rather than as a free
+ * position: dividing by it would report an infinite return, and the
+ * honest reading of "0" in that field is "nobody filled this in".
+ */
+function gainOn(
+  valueUsd: number,
+  costBasisUsd: number | undefined,
+): { costUsd: number | null; gainUsd: number | null; gainPct: number | null } {
+  if (costBasisUsd === undefined || !Number.isFinite(costBasisUsd) || costBasisUsd <= 0) {
+    return { costUsd: null, gainUsd: null, gainPct: null };
+  }
+  const gainUsd = valueUsd - costBasisUsd;
+  return { costUsd: costBasisUsd, gainUsd, gainPct: (gainUsd / costBasisUsd) * 100 };
 }

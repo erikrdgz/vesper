@@ -1,74 +1,69 @@
 /**
  * The Vesper identity.
  *
- * The mark is the 3D object flattened: the same six-sided prism you watch
- * turn on the Crypto tab, drawn face-on with its three visible faces
- * picked out. That is the whole argument for it — the identity is not
- * applied to the product, it is a drawing of the product's one piece of
- * furniture, so the favicon, the intro and the thing spinning in the
- * corner are all the same object.
+ * A tapered V: two strokes falling from angled tips, their inner edges
+ * curving in to a notch, their outer edges running straight to a sharp
+ * vertex. The asymmetry between a curved inner edge and a straight outer
+ * one is what gives it weight — a V drawn with four straight lines reads
+ * as a checkmark or a chevron, not a letter.
  *
- * The interior lines meet off-centre, which is what stops it reading as a
- * flat hexagon: a solid turned a few degrees shows three faces of unequal
- * width, and that asymmetry is the only thing doing the work.
+ * One path, so it scales from a 16px favicon to a full-screen intro
+ * without a second drawing.
  */
 
-import Svg, { Path, Polygon } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 import { StyleSheet, View } from "react-native";
 
 import { color, space } from "../theme";
 import { Txt } from "./primitives";
 
-/** Vertices of a pointy-top hexagon on a 24 grid, radius 10, centre (12,12). */
-const HEX = "12,2 20.66,7 20.66,17 12,22 3.34,17 3.34,7";
+/**
+ * The mark, on a 24 grid.
+ *
+ * Traced clockwise from the top-left tip: across the left stroke's angled
+ * end, down its curving inner edge to the notch, up the right stroke's
+ * inner edge to its tip, then straight down the outer edge to the vertex
+ * and straight back up to the start.
+ */
+export const VESPER_PATH =
+  "M2 5.2 C4.6 5.9 6.5 7.4 7.7 9.8 L11.95 14.6 L16.3 9.8 " +
+  "C17.5 7.4 19.4 5.9 22 5.2 L12.2 20.6 Z";
 
-/** Where the three interior edges meet. Right of centre, so it reads turned. */
-const PIVOT = { x: 14.6, y: 12.8 };
+/**
+ * The same mark split along its own centre line.
+ *
+ * The two strokes share the notch-to-vertex edge, so drawn together they
+ * are indistinguishable from `VESPER_PATH`. Apart, they let the intro
+ * bring each stroke down separately and converge them on the vertex,
+ * which is the motion the shape already implies.
+ */
+export const VESPER_STROKES = {
+  left: "M2 5.2 C4.6 5.9 6.5 7.4 7.7 9.8 L11.95 14.6 L12.2 20.6 Z",
+  right: "M22 5.2 C19.4 5.9 17.5 7.4 16.3 9.8 L11.95 14.6 L12.2 20.6 Z",
+} as const;
+
+/** One stroke of the mark, for the intro. */
+export function VesperStroke({
+  side,
+  size = 24,
+  tone = color.accent,
+}: MarkProps & { side: keyof typeof VESPER_STROKES }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d={VESPER_STROKES[side]} fill={tone} />
+    </Svg>
+  );
+}
 
 export interface MarkProps {
   size?: number;
   tone?: string;
-  /** Fills the leading face, for use at small sizes where lines vanish. */
-  solid?: boolean;
 }
 
-export function VesperMark({ size = 24, tone = color.accent, solid }: MarkProps) {
-  const scale = size / 24;
-
+export function VesperMark({ size = 24, tone = color.accent }: MarkProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {solid && (
-        // The leading face only. At 16px the interior lines merge into a
-        // smudge, so the favicon leans on silhouette plus one filled plane.
-        <Path
-          d={`M12 2 L${PIVOT.x} ${PIVOT.y} L12 22 L3.34 17 L3.34 7 Z`}
-          fill={tone}
-          fillOpacity={0.9}
-        />
-      )}
-
-      <Polygon
-        points={HEX}
-        stroke={tone}
-        strokeWidth={1.8 / scale > 2.4 ? 2.4 : 1.8}
-        strokeLinejoin="round"
-        fill="none"
-      />
-
-      {!solid && (
-        <Path
-          d={
-            `M12 2 L${PIVOT.x} ${PIVOT.y} ` +
-            `M${PIVOT.x} ${PIVOT.y} L3.34 17 ` +
-            `M${PIVOT.x} ${PIVOT.y} L20.66 17`
-          }
-          stroke={tone}
-          strokeWidth={1.4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity={0.75}
-        />
-      )}
+      <Path d={VESPER_PATH} fill={tone} />
     </Svg>
   );
 }

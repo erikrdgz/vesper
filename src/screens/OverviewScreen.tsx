@@ -73,6 +73,17 @@ export function OverviewScreen() {
               minorTone={color.textSecondary}
               minorFrom={balance.major.length}
             />
+            <View style={styles.returnRow}>
+              <Txt variant="micro" tone="textMuted">
+                Total return
+              </Txt>
+              <Txt variant="mono" tone={netWorth.gainUsd >= 0 ? "positive" : "negative"}>
+                {usdSigned(netWorth.gainUsd)} · {pct(netWorth.gainPct)}
+              </Txt>
+              <Txt variant="micro" tone="textMuted">
+                on {usd(netWorth.costUsd)} invested
+              </Txt>
+            </View>
             <ChartFill points={series.points} loading={series.loading} />
           </Pane>
 
@@ -259,7 +270,9 @@ function PositionRow({ entry }: { entry: ValuedAsset }) {
             {entry.asset.label}
           </Txt>
           <Txt variant="micro" tone="textMuted">
-            {defi ? "Marked to market" : "Stated"} · {weight(entry.weight)}
+            {entry.gainPct === null
+              ? `${defi ? "Marked to market" : "Stated"} · ${weight(entry.weight)}`
+              : `${weight(entry.weight)} · ${usdSigned(entry.gainUsd ?? 0)} since bought`}
           </Txt>
         </View>
         <View style={styles.positionValue}>
@@ -376,11 +389,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: space.xs,
   },
+  returnRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    flexWrap: "wrap",
+    gap: space.xs,
+  },
   chartFill: {
     flex: 1,
     minHeight: 120,
-    marginHorizontal: -space.md,
-    marginBottom: -space.md,
+    marginHorizontal: -space.sm,
+    marginBottom: -space.xs,
   },
   fill: {
     flex: 1,

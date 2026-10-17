@@ -262,6 +262,20 @@ export const layout = {
   columnGap: space.xl,
   /** Page padding, per side. */
   gutter: { mobile: space.lg, desktop: space.xxl },
+  /**
+   * The two numbers that decide whether the grid reads as a terminal or
+   * as a set of bento blocks.
+   *
+   * `paneGap: 1` with `paneRadius: 0` gives hairline rules and full
+   * bleed — a trading terminal. Raising the gap and the radius lets the
+   * ground show between panes and turns them into blocks. Nothing else
+   * in the app has to change to move between the two.
+   */
+  paneGap: 10,
+  paneRadius: 18,
+  /** Padding around the whole grid, so blocks do not touch the window. */
+  paneInset: 10,
+
   /** Desktop left nav rail. */
   railWidth: 232,
   /** Mobile bottom tab bar. */

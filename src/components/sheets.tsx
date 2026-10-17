@@ -8,28 +8,19 @@
  */
 
 import { useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { useNavigation } from "../hooks/useNavigation";
 import { useVesper } from "../hooks/useVesper";
-import { usd } from "../lib/format";
+import { tokenAmount, usd } from "../lib/format";
+import { SWAP_FEE_BPS, SWAP_MESSAGE, quoteSwap } from "../lib/exchange";
+import { TOKEN_CATALOG, catalogById, type CatalogEntry } from "../data/catalog";
 import { color, space } from "../theme";
-import { isTradFi, type Asset, type TradFiKind } from "../types";
+import { isDeFi, isTradFi, type Asset, type TradFiKind } from "../types";
 import { ChoiceRow, Field } from "./Field";
+import { ChevronRightIcon } from "./icons";
 import { Action, Divider, Txt } from "./primitives";
 import { Sheet } from "./Sheet";
-
-/** Tokens someone can add without knowing CoinGecko's internal ids. */
-const TOKEN_CATALOG = [
-  { symbol: "BTC", label: "Bitcoin", coingeckoId: "bitcoin" },
-  { symbol: "ETH", label: "Ethereum", coingeckoId: "ethereum" },
-  { symbol: "SOL", label: "Solana", coingeckoId: "solana" },
-  { symbol: "LINK", label: "Chainlink", coingeckoId: "chainlink" },
-  { symbol: "ADA", label: "Cardano", coingeckoId: "cardano" },
-  { symbol: "DOT", label: "Polkadot", coingeckoId: "polkadot" },
-  { symbol: "AVAX", label: "Avalanche", coingeckoId: "avalanche-2" },
-  { symbol: "MATIC", label: "Polygon", coingeckoId: "matic-network" },
-] as const;
 
 const KINDS: { value: TradFiKind; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -296,6 +287,26 @@ export function SendSheet() {
 }
 
 const styles = StyleSheet.create({
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    paddingVertical: space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: color.hairline,
+  },
+  preview: {
+    gap: space.xs,
+    padding: space.sm,
+    borderRadius: 10,
+    backgroundColor: color.well,
+  },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.sm,
+  },
   balanceNote: {
     flexDirection: "row",
     alignItems: "center",
@@ -306,3 +317,255 @@ const styles = StyleSheet.create({
     backgroundColor: color.well,
   },
 });
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * What the add button opens.
+ *
+ * It used to go straight to add-asset. With four things you can do, a
+ * chooser is one more tap but it stops the button lying about what it
+ * does.
+ */
+export function ActionsSheet() {
+  const { sheet, closeSheet, openSheet } = useNavigation();
+
+  const options: { id: "add-asset" | "swap" | "alert" | "send"; title: string; detail: string }[] = [
+    { id: "add-asset", title: "Add an asset", detail: "A bank account, a brokerage, or a token" },
+    { id: "swap", title: "Swap tokens", detail: "Convert one holding into another at live rates" },
+    { id: "alert", title: "Set a price alert", detail: "Get told when a token crosses a price" },
+    { id: "send", title: "Record a transfer", detail: "Log money leaving a cash account" },
+  ];
+
+  return (
+    <Sheet open={sheet === "actions"} onClose={closeSheet} title="What next?">
+      {options.map((option) => (
+        <Pressable
+          key={option.id}
+          onPress={() => openSheet(option.id)}
+          accessibilityRole="button"
+          accessibilityLabel={option.title}
+          style={styles.option}
+        >
+          <View style={{ flex: 1 }}>
+            <Txt variant="bodyStrong">{option.title}</Txt>
+            <Txt variant="caption" tone="textMuted">
+              {option.detail}
+            </Txt>
+          </View>
+          <ChevronRightIcon size={16} tone={color.textMuted} />
+        </Pressable>
+      ))}
+    </Sheet>
+  );
+}
+
+/**
+ * The swap.
+ *
+ * Priced live, previewed before it commits, and explicit that it settles
+ * nothing. The preview is the point: an exchange that applies on the
+ * same tap that sets the amount is how people send the wrong number.
+ */
+export function SwapSheet() {
+  const { sheet, closeSheet } = useNavigation();
+  const { assets, prices, swap } = useVesper();
+
+  const tokens = useMemo(() => assets.filter(isDeFi), [assets]);
+  const [fromId, setFromId] = useState<string>("");
+  const [toId, setToId] = useState<string>("");
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const from = tokens.find((t) => t.id === fromId) ?? tokens[0];
+  const to = tokens.find((t) => t.id === toId) ?? tokens.find((t) => t.id !== from?.id);
+
+  const parsed = parseAmount(amount);
+  const priced =
+    from && to && parsed !== null
+      ? quoteSwap(assets, from.id, to.id, parsed, prices.quotes)
+      : null;
+
+  function submit() {
+    if (!from || !to) return;
+    if (parsed === null) return setError("Enter an amount above zero.");
+
+    const result = swap(from.id, to.id, parsed);
+    if (!result.ok) return setError(SWAP_MESSAGE[result.error]);
+
+    setAmount("");
+    setError(null);
+    closeSheet();
+  }
+
+  if (tokens.length < 2) {
+    return (
+      <Sheet open={sheet === "swap"} onClose={closeSheet} title="Swap tokens">
+        <Txt variant="body" tone="textSecondary">
+          You need at least two tokens in the book to swap between them.
+        </Txt>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Sheet open={sheet === "swap"} onClose={closeSheet} title="Swap tokens">
+      <ChoiceRow
+        label="From"
+        value={from?.id ?? ""}
+        onChange={(id) => {
+          setFromId(id);
+          if (id === to?.id) setToId(tokens.find((t) => t.id !== id)?.id ?? "");
+        }}
+        options={tokens.map((token) => ({ value: token.id, label: token.symbol }))}
+      />
+
+      <Field
+        label={`Amount in ${from?.symbol ?? ""}`}
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="decimal-pad"
+        placeholder={from ? String(Math.min(from.amount, 0.1)) : "0"}
+        error={error}
+      />
+      {from && (
+        <Txt variant="caption" tone="textMuted">
+          You hold {tokenAmount(from.amount, from.symbol)}.
+        </Txt>
+      )}
+
+      <ChoiceRow
+        label="To"
+        value={to?.id ?? ""}
+        onChange={setToId}
+        options={tokens
+          .filter((token) => token.id !== from?.id)
+          .map((token) => ({ value: token.id, label: token.symbol }))}
+      />
+
+      {priced?.ok && to && from && (
+        <View style={styles.preview}>
+          <PreviewRow label="Rate" value={`1 ${from.symbol} = ${priced.quote.rate.toFixed(4)} ${to.symbol}`} />
+          <PreviewRow label="Value out" value={usd(priced.quote.fromUsd)} />
+          <PreviewRow label={`Fee (${SWAP_FEE_BPS / 100}%)`} value={usd(priced.quote.feeUsd)} />
+          <Divider />
+          <PreviewRow
+            label="You receive"
+            value={tokenAmount(priced.quote.toAmount, to.symbol)}
+            strong
+          />
+        </View>
+      )}
+
+      {priced && !priced.ok && (
+        <Txt variant="caption" tone="negative">
+          {SWAP_MESSAGE[priced.error]}
+        </Txt>
+      )}
+
+      <Txt variant="caption" tone="textMuted">
+        Nothing is traded. This rewrites your local book at today's prices and moves the cost
+        basis across with it, so your return stays correct afterwards.
+      </Txt>
+
+      <Divider style={{ marginVertical: space.xs }} />
+      <Action label="Swap" variant="primary" onPress={submit} disabled={!priced?.ok} />
+    </Sheet>
+  );
+}
+
+function PreviewRow({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <View style={styles.previewRow}>
+      <Txt variant="caption" tone="textSecondary">
+        {label}
+      </Txt>
+      <Txt variant={strong ? "bodyStrong" : "mono"}>{value}</Txt>
+    </View>
+  );
+}
+
+/** Set a price to be told about. */
+export function AlertSheet() {
+  const { sheet, closeSheet } = useNavigation();
+  const { assets, watchlist, prices, addAlert } = useVesper();
+
+  // Anything held or followed is worth alerting on.
+  const options = useMemo(() => {
+    const ids = new Set([...assets.filter(isDeFi).map((a) => a.coingeckoId), ...watchlist]);
+    return [...ids].map((id) => catalogById(id)).filter((e): e is CatalogEntry => !!e);
+  }, [assets, watchlist]);
+
+  const [coingeckoId, setCoingeckoId] = useState<string>("");
+  const [direction, setDirection] = useState<"above" | "below">("above");
+  const [price, setPrice] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const entry = options.find((o) => o.coingeckoId === coingeckoId) ?? options[0];
+  const current = entry ? prices.quotes[entry.coingeckoId]?.usd : undefined;
+
+  function submit() {
+    const parsed = parseAmount(price);
+    if (!entry) return;
+    if (parsed === null) return setError("Enter a price above zero.");
+
+    addAlert({
+      coingeckoId: entry.coingeckoId,
+      symbol: entry.symbol,
+      direction,
+      priceUsd: parsed,
+    });
+    setPrice("");
+    setError(null);
+    closeSheet();
+  }
+
+  return (
+    <Sheet open={sheet === "alert"} onClose={closeSheet} title="Set a price alert">
+      <ChoiceRow
+        label="Token"
+        value={entry?.coingeckoId ?? ""}
+        onChange={setCoingeckoId}
+        options={options.map((o) => ({ value: o.coingeckoId, label: o.symbol }))}
+      />
+      <ChoiceRow
+        label="When the price goes"
+        value={direction}
+        onChange={setDirection}
+        options={[
+          { value: "above" as const, label: "Above" },
+          { value: "below" as const, label: "Below" },
+        ]}
+      />
+      <Field
+        label="Price"
+        value={price}
+        onChangeText={setPrice}
+        keyboardType="decimal-pad"
+        prefix="$"
+        placeholder={current ? String(Math.round(current)) : "0"}
+        error={error}
+      />
+      {current !== undefined && (
+        <Txt variant="caption" tone="textMuted">
+          {entry?.symbol} is {usd(current)} now.
+        </Txt>
+      )}
+      <Txt variant="caption" tone="textMuted">
+        Checked each time prices refresh, about every two minutes, and only while this tab is
+        open. Vesper has no server to watch it for you.
+      </Txt>
+
+      <Divider style={{ marginVertical: space.xs }} />
+      <Action label="Arm the alert" variant="primary" onPress={submit} />
+    </Sheet>
+  );
+}

@@ -14,6 +14,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Asset, PersistedState, QuoteMap, Transaction } from "../types";
+import { seedAssets } from "./seed";
 
 const KEY = "vesper.state.v1";
 const CHART_KEY = "vesper.charts.v1";
@@ -21,6 +22,23 @@ const WRITE_DEBOUNCE_MS = 400;
 
 /** How old a cached quote set can be before we stop trusting it at all. */
 export const QUOTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12;
+
+/**
+ * Fill a missing cost basis from the seed, by id.
+ *
+ * Only for rows the seed knows. A position someone added themselves has
+ * no basis we could honestly supply, so it stays untracked and is left
+ * out of the return rather than counted at zero cost.
+ */
+function assets_withSeededCostBasis(assets: Asset[]): Asset[] {
+  const seeded = new Map(seedAssets.map((asset) => [asset.id, asset.costBasisUsd]));
+
+  return assets.map((asset) => {
+    if (asset.costBasisUsd !== undefined) return asset;
+    const basis = seeded.get(asset.id);
+    return basis === undefined ? asset : ({ ...asset, costBasisUsd: basis } as Asset);
+  });
+}
 
 function isTransactionArray(value: unknown): value is Transaction[] {
   return (
@@ -62,9 +80,21 @@ export async function loadState(): Promise<PersistedState | null> {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
 
-    const candidate = parsed as Partial<PersistedState>;
-    if (candidate.version !== 1) return null;
+    // The version has to widen past the current literal, or the v1
+    // branch below is unreachable as far as the compiler is concerned.
+    const candidate = parsed as Omit<Partial<PersistedState>, "version"> & {
+      version?: number;
+    };
+    if (candidate.version !== 1 && candidate.version !== 2) return null;
     if (!isAssetArray(candidate.assets)) return null;
+
+    // v1 had no cost basis. Dropping those saves would have been easier
+    // and would have thrown away every edit someone had made; instead
+    // each seeded position lends its basis back to the matching row, and
+    // anything the person added themselves stays untracked, which is
+    // true rather than invented.
+    const assets =
+      candidate.version === 1 ? assets_withSeededCostBasis(candidate.assets) : candidate.assets;
 
     const fetchedAt =
       typeof candidate.quotesFetchedAt === "number" ? candidate.quotesFetchedAt : null;
@@ -73,8 +103,8 @@ export async function loadState(): Promise<PersistedState | null> {
     const fresh = fetchedAt !== null && Date.now() - fetchedAt < QUOTE_CACHE_MAX_AGE_MS;
 
     return {
-      version: 1,
-      assets: candidate.assets,
+      version: 2,
+      assets,
       // Transactions are cosmetic, so a bad list degrades to empty rather
       // than throwing the whole save away with the balances in it.
       transactions: isTransactionArray(candidate.transactions) ? candidate.transactions : [],
@@ -83,6 +113,10 @@ export async function loadState(): Promise<PersistedState | null> {
         candidate.watchlist.every((id) => typeof id === "string")
           ? candidate.watchlist
           : [],
+      // Alerts and activity are conveniences; a malformed list degrades
+      // to empty rather than taking the balances down with it.
+      alerts: Array.isArray(candidate.alerts) ? candidate.alerts : [],
+      activity: Array.isArray(candidate.activity) ? candidate.activity : [],
       quotes: fresh ? ((candidate.quotes as QuoteMap | null) ?? null) : null,
       quotesFetchedAt: fresh ? fetchedAt : null,
       reduceMotion: typeof candidate.reduceMotion === "boolean" ? candidate.reduceMotion : null,

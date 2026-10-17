@@ -132,3 +132,66 @@ test("weights across positive holdings sum to one", () => {
   const total = result.valued.reduce((sum, entry) => sum + entry.weight, 0);
   assert.ok(Math.abs(total - 1) < 1e-9);
 });
+
+test("a position with a basis reports gain in dollars and percent", () => {
+  const held: Asset = {
+    id: "g",
+    class: "defi",
+    symbol: "BTC",
+    label: "Bitcoin",
+    amount: 1,
+    coingeckoId: "bitcoin",
+    costBasisUsd: 80_000,
+  };
+  const result = computeNetWorth([held], quotes);
+  const row = result.valued[0]!;
+  assert.equal(row.costUsd, 80_000);
+  assert.equal(row.gainUsd, 20_000);
+  assert.equal(row.gainPct, 25);
+});
+
+test("cash without a basis is left out of the return, not counted at zero cost", () => {
+  const held: Asset = {
+    id: "h",
+    class: "defi",
+    symbol: "BTC",
+    label: "Bitcoin",
+    amount: 1,
+    coingeckoId: "bitcoin",
+    costBasisUsd: 80_000,
+  };
+  // 4,500 of cash alongside a 100k position up 20k. Folding the cash in
+  // at zero cost would report 24.2% instead of the true 25%.
+  const result = computeNetWorth([held, checking], quotes);
+  assert.equal(result.costUsd, 80_000);
+  assert.equal(result.trackedValueUsd, 100_000);
+  assert.equal(result.gainPct, 25);
+});
+
+test("a zero basis is read as untracked rather than an infinite return", () => {
+  const free: Asset = {
+    id: "i",
+    class: "defi",
+    symbol: "BTC",
+    label: "Bitcoin",
+    amount: 1,
+    coingeckoId: "bitcoin",
+    costBasisUsd: 0,
+  };
+  const row = computeNetWorth([free], quotes).valued[0]!;
+  assert.equal(row.costUsd, null);
+  assert.equal(row.gainPct, null);
+});
+
+test("a liability never reports a gain", () => {
+  const row = computeNetWorth([card], quotes).valued.find((e) => e.asset.id === "b");
+  assert.equal(row?.costUsd, null);
+  assert.equal(row?.gainUsd, null);
+});
+
+test("a book with no bases at all reports zero return rather than NaN", () => {
+  const result = computeNetWorth([checking], quotes);
+  assert.equal(result.costUsd, 0);
+  assert.equal(result.gainPct, 0);
+  assert.ok(Number.isFinite(result.gainUsd));
+});

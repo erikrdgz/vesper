@@ -11,7 +11,13 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 
 import { AppShell } from "./src/components/AppShell";
-import { AddAssetSheet, SendSheet } from "./src/components/sheets";
+import {
+  ActionsSheet,
+  AddAssetSheet,
+  AlertSheet,
+  SendSheet,
+  SwapSheet,
+} from "./src/components/sheets";
 import { NavigationProvider, useNavigation } from "./src/hooks/useNavigation";
 import { VesperProvider } from "./src/hooks/useVesper";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
@@ -20,6 +26,7 @@ import { AssetDetailScreen } from "./src/screens/AssetDetailScreen";
 import { CryptoScreen } from "./src/screens/CryptoScreen";
 import { OverviewScreen } from "./src/screens/OverviewScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { WatchScreen } from "./src/screens/WatchScreen";
 import { color } from "./src/theme";
 
 function Router() {
@@ -34,6 +41,8 @@ function Router() {
       return <AnalyticsScreen />;
     case "crypto":
       return <CryptoScreen />;
+    case "watch":
+      return <WatchScreen />;
     case "settings":
       return <SettingsScreen />;
     case "home":
@@ -61,7 +70,10 @@ function Gate() {
           <AppShell>
             <Router />
           </AppShell>
+          <ActionsSheet />
           <AddAssetSheet />
+          <SwapSheet />
+          <AlertSheet />
           <SendSheet />
         </>
       ) : (

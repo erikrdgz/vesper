@@ -178,6 +178,26 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
                 {usdSigned(valued.change24hUsd)}
               </Txt>
             </View>
+            {valued.costUsd !== null && (
+              <>
+                <View style={styles.row}>
+                  <Txt variant="caption" tone="textSecondary">
+                    Cost
+                  </Txt>
+                  <Txt variant="mono" tone="textSecondary">
+                    {usd(valued.costUsd)}
+                  </Txt>
+                </View>
+                <View style={styles.row}>
+                  <Txt variant="caption" tone="textSecondary">
+                    Return
+                  </Txt>
+                  <Txt variant="mono" tone={valued.gainUsd! >= 0 ? "positive" : "negative"}>
+                    {usdSigned(valued.gainUsd ?? 0)} · {pct(valued.gainPct ?? 0)}
+                  </Txt>
+                </View>
+              </>
+            )}
             <PriceSourceNote compact />
           </Pane>
 
@@ -243,7 +263,7 @@ const styles = StyleSheet.create({
   chartFill: {
     flex: 1,
     minHeight: 150,
-    marginHorizontal: -space.md,
+    marginHorizontal: -space.sm,
   },
   statRow: {
     flexDirection: "row",

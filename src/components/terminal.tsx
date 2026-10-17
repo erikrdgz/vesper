@@ -27,7 +27,7 @@ import { useNetWorth } from "../hooks/useNetWorth";
 import { useVesper } from "../hooks/useVesper";
 import { pct, usd } from "../lib/format";
 import { catalogById, type CatalogEntry } from "../data/catalog";
-import { color, radius, space } from "../theme";
+import { color, layout, radius, space } from "../theme";
 import { isDeFi, type TabId } from "../types";
 import { Wordmark } from "./brand";
 import { CoinMark } from "./coins";
@@ -148,6 +148,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "home", label: "Overview" },
   { id: "analytics", label: "Analytics" },
   { id: "crypto", label: "Crypto" },
+  { id: "watch", label: "Watch" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -331,9 +332,9 @@ export function CommandBar() {
         <RefreshRing />
         <Profile />
         <Pressable
-          onPress={() => openSheet("add-asset")}
+          onPress={() => openSheet("actions")}
           accessibilityRole="button"
-          accessibilityLabel="Add an asset"
+          accessibilityLabel="Add, swap or set an alert"
           style={styles.commandAdd}
         >
           <PlusIcon size={14} tone={color.accentInk} strokeWidth={2.25} />
@@ -485,29 +486,31 @@ export function Watchlist() {
 
 const styles = StyleSheet.create({
   grid: {
-    // The container's own colour shows through the 1px gaps and becomes
-    // every rule in the layout.
-    backgroundColor: color.hairline,
-    gap: 1,
+    // At a 1px gap the container's colour reads as every rule in the
+    // layout; at a wider one it reads as the ground between blocks.
+    // `layout.paneGap` is the single number that decides which.
+    backgroundColor: layout.paneGap > 2 ? color.ground : color.hairline,
+    gap: layout.paneGap,
   },
   pane: {
-    backgroundColor: color.ground,
+    backgroundColor: layout.paneGap > 2 ? color.card : color.ground,
+    borderRadius: layout.paneRadius,
     overflow: "hidden",
   },
   paneHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: space.md,
-    paddingTop: space.md,
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
     paddingBottom: space.xs,
-    minHeight: 38,
+    minHeight: 42,
   },
   paneScroll: {
     flex: 1,
   },
   paneBody: {
-    padding: space.md,
+    padding: space.lg,
     paddingTop: space.xs,
     gap: space.sm,
   },
@@ -633,23 +636,23 @@ const styles = StyleSheet.create({
   },
 
   watchBar: {
-    backgroundColor: color.well,
-    borderBottomWidth: 1,
-    borderBottomColor: color.hairline,
+    backgroundColor: color.ground,
   },
   watchRun: {
     flexDirection: "row",
-    gap: 1,
-    backgroundColor: color.hairline,
+    gap: layout.paneGap,
+    paddingHorizontal: layout.paneInset,
+    paddingVertical: layout.paneInset,
   },
   watchCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: space.xs,
+    gap: space.sm,
     paddingHorizontal: space.md,
-    paddingVertical: space.xs,
-    minWidth: 184,
-    backgroundColor: color.well,
+    paddingVertical: space.sm,
+    minWidth: 190,
+    borderRadius: radius.md,
+    backgroundColor: color.card,
   },
   watchCardActive: {
     backgroundColor: color.card,

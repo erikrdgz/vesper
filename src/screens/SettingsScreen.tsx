@@ -12,7 +12,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { useNetWorth } from "../hooks/useNetWorth";
 import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
-import { relativeTime, usd } from "../lib/format";
+import { relativeTime, transactionDate, usd } from "../lib/format";
 import { color, radius, space } from "../theme";
 import { isDeFi } from "../types";
 import { TOKEN_CATALOG } from "../data/catalog";
@@ -36,6 +36,7 @@ export function SettingsScreen() {
     resetToSeed,
     watchlist,
     toggleWatch,
+    activity,
   } = useVesper();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
@@ -131,7 +132,33 @@ export function SettingsScreen() {
             />
           </Pane>
 
-          <Pane flex={1} title="Stored data">
+          <Pane
+            flex={1}
+            title={`Activity · ${activity.length}`}
+            scroll={isDesktop}
+            minHeight={isDesktop ? undefined : 180}
+          >
+            {activity.length === 0 ? (
+              <Txt variant="caption" tone="textMuted">
+                Nothing yet. Swaps, additions and triggered alerts land here, so a book that
+                changed under you can say what happened.
+              </Txt>
+            ) : (
+              activity.map((entry) => (
+                <View key={entry.id} style={styles.activityRow}>
+                  <View style={styles.activityDot} />
+                  <Txt variant="caption" tone="textSecondary" style={{ flex: 1 }}>
+                    {entry.summary}
+                  </Txt>
+                  <Txt variant="micro" tone="textMuted">
+                    {transactionDate(entry.at)}
+                  </Txt>
+                </View>
+              ))
+            )}
+          </Pane>
+
+          <Pane title="Stored data">
             <Txt variant="caption" tone="textSecondary">
               Your accounts, holdings and preferences live under one key in this browser's local
               storage. Price history is cached separately for an hour, so a reload costs CoinGecko
@@ -217,5 +244,17 @@ const styles = StyleSheet.create({
   chipOn: {
     backgroundColor: color.accent,
     borderColor: color.accent,
+  },
+  activityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.xs,
+    paddingVertical: space.xxs,
+  },
+  activityDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: color.textMuted,
   },
 });
