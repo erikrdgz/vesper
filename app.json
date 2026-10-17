@@ -1,17 +1,21 @@
 {
   "expo": {
-    "name": "vesper",
+    "name": "Vesper",
     "slug": "vesper",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "scheme": "vesper",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0E14",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.erikrdgz.vesper"
     },
     "android": {
+      "package": "com.erikrdgz.vesper",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0B0E14",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -19,7 +23,17 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "bundler": "metro",
+      "output": "single",
       "favicon": "./assets/favicon.png"
+    },
+    "experiments": {
+      "baseUrl": "/vesper"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0c4b2f6c-de16-4981-a1ce-e0d2b82feea0"
+      }
     }
   }
 }
