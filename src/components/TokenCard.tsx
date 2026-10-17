@@ -49,8 +49,8 @@ interface TokenCardProps {
   /** Raised and fully legible when true. */
   active: boolean;
   onPress: () => void;
-  /** How far this card is pulled up over the one before it. Stack only. */
-  overlap: number;
+  /** Where this card sits in the hand, counting from the back. Stack only. */
+  slot: number;
   index: number;
   /**
    * `stack` is the hand of cards a phone gets; `rail` is the row a window
@@ -65,7 +65,7 @@ export function TokenCard({
   entry,
   active,
   onPress,
-  overlap,
+  slot,
   index,
   layout = "stack",
   glow,
@@ -92,14 +92,35 @@ export function TokenCard({
   }
 
   /**
-   * Selection is a spring, not a cut.
+   * The shuffle.
    *
-   * Picking a card used to move it to the end of the list, which is a
-   * reorder: every card below it jumped a slot in one frame and the one
-   * you picked appeared somewhere else. Nothing moves in the layout now
-   * — the chosen card is painted over its neighbours and rises under a
-   * spring, which is what a card does when a hand pulls it out.
+   * Every card in the hand is absolutely placed at its own slot, and
+   * picking one changes which slot each card holds rather than which
+   * order they are rendered in. The cards then travel to their new
+   * places under a spring — the one you touched slides down to the
+   * front of the hand and the rest close the gap behind it, which is
+   * what a hand of cards does.
+   *
+   * It used to be a reorder of the list, so every card below the one you
+   * touched jumped a slot in a single frame and the card you picked
+   * appeared somewhere else without crossing the distance.
    */
+  const slide = useRef(new Animated.Value(slot * CARD_PEEK)).current;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      slide.setValue(slot * CARD_PEEK);
+      return;
+    }
+    const animation = Animated.spring(slide, {
+      toValue: slot * CARD_PEEK,
+      ...spring.flip,
+      useNativeDriver: nativeDriver,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [slot, slide, reduceMotion]);
+
   useEffect(() => {
     if (reduceMotion) {
       raise.setValue(active ? 1 : 0);
@@ -116,7 +137,7 @@ export function TokenCard({
 
   const muted = `rgba(${hexToRgb(skin.ink)}, 0.62)`;
 
-  return (
+  const face = (
     <Pressable
       onPress={onPress}
       onHoverIn={() => to(1)}
@@ -124,15 +145,7 @@ export function TokenCard({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${asset.label}, ${usd(entry.valueUsd)}`}
-      // In the stack, only the first card sits flush and every other one
-      // climbs over its predecessor — that overlap is what makes it read
-      // as a stack. On the rail they sit side by side, and the selected
-      // card is lifted above its neighbours rather than reordered.
-      style={[
-        rail ? styles.railSlot : styles.slot,
-        !rail && index > 0 && { marginTop: -overlap },
-        { zIndex: active ? 50 : index },
-      ]}
+      style={rail ? styles.railSlot : styles.slot}
     >
       <Animated.View
         style={[
@@ -206,6 +219,19 @@ export function TokenCard({
       </Animated.View>
     </Pressable>
   );
+
+  // On the rail the cards sit side by side in the flow. In the hand each
+  // one is placed at its own slot, so a change of slot is a move rather
+  // than a reflow, and the card on top is the one nearest the front.
+  if (rail) return <View style={{ zIndex: active ? 50 : index }}>{face}</View>;
+
+  return (
+    <Animated.View
+      style={[styles.hand, { zIndex: slot }, { transform: [{ translateY: slide }] }]}
+    >
+      {face}
+    </Animated.View>
+  );
 }
 
 /** "#2A1403" -> "42, 20, 3". For rgba() tints off a card's own ink. */
@@ -224,6 +250,12 @@ export const CARD_WIDTH = 252;
 const styles = StyleSheet.create({
   slot: {
     width: "100%",
+  },
+  hand: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
   },
   railSlot: {
     width: CARD_WIDTH,

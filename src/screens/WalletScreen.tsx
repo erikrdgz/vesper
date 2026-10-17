@@ -85,6 +85,23 @@ export function WalletScreen() {
   const defaultFront = isDesktop ? holdings[0] : holdings[holdings.length - 1];
   const frontCard = selectedCard ?? defaultFront?.asset.id ?? null;
 
+  /**
+   * Which slot each card holds in the hand.
+   *
+   * The render order never changes — only the slot a card is assigned
+   * does, and the card animates to it. The chosen card takes the last
+   * slot, which in a downward stack is the front of the hand.
+   */
+  const slots = useMemo(() => {
+    const order = selectedCard
+      ? [
+          ...holdings.filter((entry) => entry.asset.id !== selectedCard),
+          ...holdings.filter((entry) => entry.asset.id === selectedCard),
+        ]
+      : holdings;
+    return new Map(order.map((entry, slot) => [entry.asset.id, slot]));
+  }, [holdings, selectedCard]);
+
   const tokens = assets.filter(isDeFi).length;
 
   return (
@@ -146,7 +163,7 @@ export function WalletScreen() {
                 <Action label="Add a token" onPress={() => openSheet("add-asset")} />
               </>
             ) : (
-              <Deck horizontal={isDesktop}>
+              <Deck horizontal={isDesktop} count={holdings.length}>
                 {holdings.map((entry, index) => (
                   <TokenCard
                     key={entry.asset.id}
@@ -155,7 +172,7 @@ export function WalletScreen() {
                     layout={isDesktop ? "rail" : "stack"}
                     active={selectedCard === entry.asset.id}
                     glow={frontCard === entry.asset.id}
-                    overlap={CARD_HEIGHT - CARD_PEEK}
+                    slot={slots.get(entry.asset.id) ?? index}
                     onPress={() => {
                       // Tapping the front card opens it; tapping any
                       // other brings it to the front first, which is how
@@ -426,8 +443,25 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
  * a column of slivers with acres of empty beside it — so the cards go
  * side by side, face up, and the row scrolls.
  */
-function Deck({ horizontal, children }: { horizontal: boolean; children: React.ReactNode }) {
-  if (!horizontal) return <View style={styles.deck}>{children}</View>;
+function Deck({
+  horizontal,
+  count,
+  children,
+}: {
+  horizontal: boolean;
+  count: number;
+  children: React.ReactNode;
+}) {
+  // Absolutely placed cards carry no height of their own, so the hand
+  // reserves it: every card but the front one shows a peek, and the
+  // front one shows all of itself.
+  if (!horizontal) {
+    return (
+      <View style={[styles.deck, { height: Math.max(0, count - 1) * CARD_PEEK + CARD_HEIGHT }]}>
+        {children}
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -473,10 +507,10 @@ const styles = StyleSheet.create({
     backgroundColor: color.accent,
   },
   deck: {
-    // The cards overlap via each card's own negative margin, so the
-    // container only needs to stop them being clipped as they lift.
-    paddingTop: space.xs,
-    paddingBottom: space.sm,
+    // The cards are placed inside this box rather than flowing through
+    // it, so it owns the height and they own their positions.
+    marginTop: space.xs,
+    marginBottom: space.sm,
   },
   rail: {
     // A lifted card grows past its slot in both directions, and a

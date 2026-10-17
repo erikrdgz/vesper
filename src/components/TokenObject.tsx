@@ -144,6 +144,24 @@ function Coin({
   const target = useMemo(() => new Color(tone), [tone]);
   const relief = useMemo(() => glyphGeometry(symbol), [symbol]);
 
+  /**
+   * The relief is struck in a lighter grade of the same metal.
+   *
+   * It was near-black, which is legible and is not a coin: a black mark
+   * on a gold face reads as a sticker, or as a hole. A real strike is
+   * the same metal catching the light at a different angle, so the mark
+   * is the tone mixed most of the way to white.
+   *
+   * It is barely metallic, which is the opposite of what it looks like
+   * it should be. There is no environment map in this scene — only two
+   * point lights and a sun — and a fully metallic surface has nothing
+   * to reflect but the void, so it renders black however bright its
+   * colour. The face gets away with `metalness: 0.9` because it carries
+   * an emissive; the mark carries its own, and takes its brightness
+   * from the light instead of from a reflection that is not there.
+   */
+  const reliefTone = useMemo(() => new Color(tone).lerp(new Color("#FFFFFF"), 0.62), [tone]);
+
   useFrame((state, delta) => {
     if (!group.current || !disc.current) return;
 
@@ -186,7 +204,13 @@ function Coin({
       {relief && (
         <>
           <mesh geometry={relief} position={[0, 0, 0.18]} scale={[1, 1, 0.055]}>
-            <meshStandardMaterial color="#0B0E14" metalness={0.4} roughness={0.5} />
+            <meshStandardMaterial
+              color={reliefTone}
+              metalness={0.2}
+              roughness={0.38}
+              emissive={reliefTone}
+              emissiveIntensity={0.3}
+            />
           </mesh>
           {/* Struck on the reverse too, so the flip lands on a face
               rather than a blank back. */}
@@ -196,7 +220,13 @@ function Coin({
             rotation={[0, Math.PI, 0]}
             scale={[1, 1, 0.055]}
           >
-            <meshStandardMaterial color="#0B0E14" metalness={0.4} roughness={0.5} />
+            <meshStandardMaterial
+              color={reliefTone}
+              metalness={0.2}
+              roughness={0.38}
+              emissive={reliefTone}
+              emissiveIntensity={0.3}
+            />
           </mesh>
         </>
       )}
