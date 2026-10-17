@@ -55,6 +55,7 @@ export function AddAssetSheet() {
   const [balance, setBalance] = useState("");
   const [token, setToken] = useState<string>("bitcoin");
   const [amount, setAmount] = useState("");
+  const [cost, setCost] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function reset() {
@@ -62,6 +63,7 @@ export function AddAssetSheet() {
     setLabel("");
     setBalance("");
     setAmount("");
+    setCost("");
     setErrors({});
   }
 
@@ -82,6 +84,12 @@ export function AddAssetSheet() {
         institution: institution.trim() || label.trim(),
         label: label.trim(),
         balanceUsd: parsed!,
+        // Only meaningful for things you invested in. Left undefined
+        // rather than zero, so an untracked account stays out of the
+        // return instead of dragging it down.
+        ...(kind === "brokerage" || kind === "retirement"
+          ? { costBasisUsd: parseAmount(cost) ?? undefined }
+          : null),
       };
       addAsset(asset);
     } else {
@@ -99,6 +107,7 @@ export function AddAssetSheet() {
         label: entry.label,
         amount: parsed!,
         coingeckoId: entry.coingeckoId,
+        costBasisUsd: parseAmount(cost) ?? undefined,
       });
       // A new token has no quote until the next fetch, and an asset that
       // reads "No price" the moment you add it looks broken.
@@ -146,8 +155,19 @@ export function AddAssetSheet() {
             prefix="$"
             error={errors.balance}
           />
+          {(kind === "brokerage" || kind === "retirement") && (
+            <Field
+              label="Total paid in (optional)"
+              value={cost}
+              onChangeText={setCost}
+              placeholder="9400"
+              keyboardType="decimal-pad"
+              prefix="$"
+            />
+          )}
           <Txt variant="caption" tone="textMuted">
-            Stated balances are taken at face value and never marked to market.
+            Stated balances are taken at face value and never marked to market. Without a figure
+            for what went in, the account is left out of your return rather than counted as free.
           </Txt>
         </>
       ) : (
@@ -169,8 +189,18 @@ export function AddAssetSheet() {
             keyboardType="decimal-pad"
             error={errors.amount}
           />
+          <Field
+            label="Total paid (optional)"
+            value={cost}
+            onChangeText={setCost}
+            placeholder="24180"
+            keyboardType="decimal-pad"
+            prefix="$"
+          />
           <Txt variant="caption" tone="textMuted">
-            Only the quantity is stored. The value is worked out from live prices every time.
+            Only the quantity and what you paid are stored. The value is worked out from live
+            prices every time. Without a cost, the position is left out of your return rather
+            than counted as free.
           </Txt>
         </>
       )}

@@ -48,6 +48,9 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
   const series = useAssetSeries(defi?.coingeckoId ?? "bitcoin", range, quote?.usd ?? 0);
 
   const [draft, setDraft] = useState(() => (defi ? String(defi.amount) : ""));
+  const [costDraft, setCostDraft] = useState(() =>
+    defi?.costBasisUsd === undefined ? "" : String(defi.costBasisUsd),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const windowStats = useMemo(() => {
@@ -75,8 +78,16 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
       setError("Enter a number of tokens, zero or more.");
       return;
     }
+
+    const rawCost = costDraft.replace(/[$,\s]/g, "").trim();
+    const cost = rawCost === "" ? undefined : Number(rawCost);
+    if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) {
+      setError("Cost has to be a number, or empty to leave it untracked.");
+      return;
+    }
+
     setError(null);
-    updateAsset(assetId, { amount: parsed });
+    updateAsset(assetId, { amount: parsed, costBasisUsd: cost });
   }
 
   const tone = quote && quote.change24h < 0 ? color.negative : color.accent;
@@ -210,7 +221,15 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
               placeholder="0.00"
               error={error}
             />
-            <Action label="Save amount" variant="primary" onPress={commitAmount} />
+            <Field
+              label="Total paid (optional)"
+              value={costDraft}
+              onChangeText={setCostDraft}
+              keyboardType="decimal-pad"
+              prefix="$"
+              placeholder="Leave empty to stop tracking return"
+            />
+            <Action label="Save" variant="primary" onPress={commitAmount} />
             <Action
               label="Remove"
               variant="quiet"
