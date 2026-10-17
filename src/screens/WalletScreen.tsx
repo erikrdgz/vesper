@@ -10,19 +10,21 @@
  * burying that in a footer link would be the cowardly version.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { useNetWorth } from "../hooks/useNetWorth";
+import { useNavigation } from "../hooks/useNavigation";
 import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
-import { relativeTime, transactionDate, usd, usdSigned } from "../lib/format";
+import { plural, relativeTime, transactionDate, usd, usdSigned } from "../lib/format";
 import { downloadCsv, positionsCsv } from "../lib/exportCsv";
 import { color, radius, space } from "../theme";
 import { isDeFi } from "../types";
 import { TOKEN_CATALOG } from "../data/catalog";
 import { Column, Row, Screen } from "../components/AppShell";
 import { CoinMark } from "../components/coins";
+import { CARD_HEIGHT, CARD_PEEK, TokenCard } from "../components/TokenCard";
 import { Field, ToggleRow } from "../components/Field";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { RefreshIcon, TrashIcon } from "../components/icons";
@@ -49,8 +51,22 @@ export function WalletScreen() {
   } = useVesper();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
+  const { openSheet, setTab, openAsset } = useNavigation();
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [exported, setExported] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+
+  const holdings = useMemo(() => {
+    const cards = netWorth.valued.filter((entry) => isDeFi(entry.asset));
+    if (!selectedCard) return cards;
+
+    // The selected card is drawn last, which in a downward stack puts it
+    // on top with nothing covering its body. Lifting it in place looked
+    // like a hover state and left the card you picked still unreadable.
+    const picked = cards.find((entry) => entry.asset.id === selectedCard);
+    if (!picked) return cards;
+    return [...cards.filter((entry) => entry.asset.id !== selectedCard), picked];
+  }, [netWorth.valued, selectedCard]);
 
   const tokens = assets.filter(isDeFi).length;
 
@@ -92,6 +108,50 @@ export function WalletScreen() {
               <Tile label="Tokens" value={String(tokens)} />
               <Tile label="Following" value={String(watchlist.length)} />
             </View>
+          </Pane>
+
+          <Pane
+            title={`Cards · ${plural(holdings.length, "token")}`}
+            minHeight={isDesktop ? undefined : 360}
+            action={
+              holdings.length > 0 ? (
+                <Txt variant="mono" tone="textMuted">
+                  {usd(netWorth.deFiUsd)}
+                </Txt>
+              ) : null
+            }
+          >
+            {holdings.length === 0 ? (
+              <>
+                <Txt variant="caption" tone="textSecondary">
+                  No tokens yet. Each one you add gets its own card here.
+                </Txt>
+                <Action label="Add a token" onPress={() => openSheet("add-asset")} />
+              </>
+            ) : (
+              <View style={styles.deck}>
+                {holdings.map((entry, index) => (
+                  <TokenCard
+                    key={entry.asset.id}
+                    entry={entry}
+                    index={index}
+                    active={selectedCard === entry.asset.id}
+                    overlap={CARD_HEIGHT - CARD_PEEK}
+                    onPress={() => {
+                      // Tapping the front card opens it; tapping any
+                      // other brings it to the front first, which is how
+                      // a stack of cards behaves in a hand.
+                      if (selectedCard === entry.asset.id) {
+                        setTab("crypto");
+                        openAsset(entry.asset.id);
+                      } else {
+                        setSelectedCard(entry.asset.id);
+                      }
+                    }}
+                  />
+                ))}
+              </View>
+            )}
           </Pane>
 
           <Pane title="Your details">
@@ -311,6 +371,12 @@ const styles = StyleSheet.create({
   },
   tileAccent: {
     backgroundColor: color.accent,
+  },
+  deck: {
+    // The cards overlap via each card's own negative margin, so the
+    // container only needs to stop them being clipped as they lift.
+    paddingTop: space.xs,
+    paddingBottom: space.sm,
   },
   chips: {
     flexDirection: "row",

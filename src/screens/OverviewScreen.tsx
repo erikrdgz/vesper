@@ -13,6 +13,7 @@ import { StyleSheet, View } from "react-native";
 import { useMeasure } from "../hooks/useMeasure";
 import { useNavigation } from "../hooks/useNavigation";
 import { useNetWorth } from "../hooks/useNetWorth";
+import { headline } from "../lib/narrate";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAssetSeries, usePortfolioSeries } from "../hooks/useSeries";
 import { useVesper } from "../hooks/useVesper";
@@ -22,7 +23,6 @@ import {
   pct,
   transactionDate,
   usd,
-  plural,
   usdParts,
   usdSigned,
   weight,
@@ -50,7 +50,7 @@ const RANGE: ChartRange = "1W";
 
 export function OverviewScreen() {
   const netWorth = useNetWorth();
-  const { transactions, profile } = useVesper();
+  const { transactions, profile, alerts } = useVesper();
   const { setTab, openSheet } = useNavigation();
   const { isDesktop } = useResponsive();
   const series = usePortfolioSeries(RANGE);
@@ -64,17 +64,18 @@ export function OverviewScreen() {
   const flow = useMemo(() => summariseFlow(transactions), [transactions]);
   const balance = usdParts(netWorth.totalUsd);
   const empty = netWorth.valued.length === 0;
+  const say = useMemo(() => headline(netWorth, alerts), [netWorth, alerts]);
 
   if (empty) {
     return (
       <Screen>
         <Pane>
-          <View style={styles.greet}>
+          <View style={styles.heroTop}>
             <View style={{ flex: 1 }}>
-              <Txt variant="caption" tone="textMuted">
-                {greeting()}
+              <Txt variant="display" tone="textMuted">
+                {greeting()},
               </Txt>
-              <Txt variant="h1" heading>
+              <Txt variant="display" heading>
                 {firstName(profile.name)}
               </Txt>
             </View>
@@ -83,7 +84,7 @@ export function OverviewScreen() {
               accessibilityRole="button"
               accessibilityLabel="Open your wallet"
             >
-              <Avatar name={profile.name} size={44} />
+              <Avatar name={profile.name} size={52} />
             </Tap>
           </View>
         </Pane>
@@ -119,31 +120,54 @@ export function OverviewScreen() {
 
   return (
     <Screen>
-      {/* The greeting goes on both breakpoints. Opening a desktop
-          straight onto a grid of nine positions was the coldest thing
-          the app did; a line that says who this is for costs one row. */}
+      {/* The opening.
+          
+          This used to be a two-line label wedged between the watch bar
+          and the balance, which is not a welcome, it is a caption. It is
+          display type with room around it now, and underneath it the app
+          says what happened in a sentence — the thing that was missing
+          was never layout, it was that Vesper never told you anything. */}
       <Pane>
-        <View style={styles.greet}>
+        <View style={styles.heroTop}>
           <View style={{ flex: 1 }}>
-            <Txt variant="caption" tone="textMuted">
-              {greeting()}
+            <Txt variant="display" tone="textMuted">
+              {greeting()},
             </Txt>
-            <Txt variant="h1" heading>
+            <Txt variant="display" heading>
               {firstName(profile.name)}
             </Txt>
           </View>
-          {empty ? null : (
-            <Txt variant="caption" tone="textMuted">
-              {plural(netWorth.valued.length, "position")} · {plural(holdings.length, "token")}
-            </Txt>
-          )}
           <Tap
             onPress={() => setTab("wallet")}
             accessibilityRole="button"
             accessibilityLabel="Open your wallet"
           >
-            <Avatar name={profile.name} size={44} />
+            <Avatar name={profile.name} size={52} />
           </Tap>
+        </View>
+
+        <View style={styles.heroSay}>
+          <View
+            style={[
+              styles.heroTick,
+              {
+                backgroundColor:
+                  say.tone === "up"
+                    ? color.positive
+                    : say.tone === "down"
+                      ? color.negative
+                      : color.hairlineStrong,
+              },
+            ]}
+          />
+          <View style={{ flex: 1 }}>
+            <Txt variant="h2">{say.lead}</Txt>
+            {say.detail ? (
+              <Txt variant="body" tone="textSecondary">
+                {say.detail}
+              </Txt>
+            ) : null}
+          </View>
         </View>
       </Pane>
 
@@ -564,10 +588,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: space.xs,
   },
-  greet: {
+  heroTop: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
+    gap: space.md,
+  },
+  heroSay: {
+    flexDirection: "row",
     gap: space.sm,
+    marginTop: space.md,
+  },
+  heroTick: {
+    width: 3,
+    borderRadius: 2,
+    alignSelf: "stretch",
   },
   quickRow: {
     flexDirection: "row",

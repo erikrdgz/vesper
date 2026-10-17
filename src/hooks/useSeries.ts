@@ -198,11 +198,16 @@ export function usePortfolioSeries(range: ChartRange): SeriesState {
           );
         }
 
-        // Show the line filling in rather than waiting for the last coin.
-        if (!controller.signal.aborted) setHistories({ ...collected });
       }
 
       if (controller.signal.aborted) return;
+      // Published in one go, at the end.
+      //
+      // This used to publish after each coin so the line appeared to
+      // fill in. But `combineSeries` sums whatever it is given, so a
+      // half-loaded set drew a real-looking line at a fraction of the
+      // true total, with a cliff where the last coin arrived. A blank
+      // chart for a second beats a wrong one.
       setHistories(collected);
       setFellBack(anyFallback);
       setLoading(false);

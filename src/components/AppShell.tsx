@@ -80,7 +80,27 @@ export function Screen({ children }: { children: React.ReactNode }) {
   const { isDesktop } = useResponsive();
 
   if (isDesktop) {
-    return <View style={styles.desktopScreen}>{children}</View>;
+    /**
+     * Fills the viewport when the content fits, scrolls when it does
+     * not.
+     *
+     * It was a plain View, on the theory that a terminal does not
+     * scroll. That holds right up until a screen gains a pane — adding
+     * the reading to Analytics squeezed the right column until
+     * Allocation and Movers collapsed to empty headers, because flex
+     * children in a bounded box shrink rather than overflow. A grid
+     * that silently eats its own content is worse than one that
+     * scrolls.
+     */
+    return (
+      <ScrollView
+        style={styles.desktopScreen}
+        contentContainerStyle={styles.desktopContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+    );
   }
 
   return (
@@ -237,6 +257,12 @@ const styles = StyleSheet.create({
   },
   desktopScreen: {
     flex: 1,
+  },
+  desktopContent: {
+    // Grow to fill, but keep a floor so panes have room to be read
+    // rather than compressing to their headers.
+    flexGrow: 1,
+    minHeight: 620,
   },
   mobileScroll: {
     flex: 1,

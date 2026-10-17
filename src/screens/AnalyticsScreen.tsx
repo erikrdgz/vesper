@@ -22,6 +22,7 @@ import { Column, Row, Screen } from "../components/AppShell";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { AreaChart, BarRow, Sparkline } from "../components/Chart";
 import { snapshotSeries } from "../lib/snapshots";
+import { observations } from "../lib/narrate";
 import { Delta, Divider, Segmented, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
@@ -41,7 +42,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 export function AnalyticsScreen() {
   const [range, setRange] = useState<ChartRange>("1M");
   const netWorth = useNetWorth();
-  const { transactions, snapshots } = useVesper();
+  const { transactions, snapshots, realisedUsd } = useVesper();
   const series = usePortfolioSeries(range);
   const { isDesktop } = useResponsive();
   const chart = useMeasure();
@@ -58,6 +59,7 @@ export function AnalyticsScreen() {
   }, [series.points]);
 
   const flow = useMemo(() => summariseFlow(transactions), [transactions]);
+  const notes = useMemo(() => observations(netWorth, realisedUsd), [netWorth, realisedUsd]);
   const movers = useMemo(
     () =>
       netWorth.valued
@@ -69,6 +71,47 @@ export function AnalyticsScreen() {
 
   return (
     <Screen>
+      {/* The reading, before the data.
+          
+          Analytics was the last screen that only handed over numbers and
+          left the interpretation to you. These are generated from the
+          same figures the charts draw, and each one only appears when it
+          is true — nothing here fires on an empty or trivial case. */}
+      <Pane title="What this says">
+        {notes.length === 0 ? (
+          <Txt variant="body" tone="textSecondary">
+            Not enough in the book yet to say anything useful. Add a position with what you paid
+            for it and this will start reading it back to you.
+          </Txt>
+        ) : (
+          <View style={styles.notes}>
+            {notes.map((note) => (
+              <View key={note.title} style={styles.note}>
+                <View
+                  style={[
+                    styles.noteTick,
+                    {
+                      backgroundColor:
+                        note.tone === "up"
+                          ? color.positive
+                          : note.tone === "down"
+                            ? color.negative
+                            : color.hairlineStrong,
+                    },
+                  ]}
+                />
+                <View style={{ flex: 1 }}>
+                  <Txt variant="micro" tone="textMuted">
+                    {note.title}
+                  </Txt>
+                  <Txt variant="body">{note.body}</Txt>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </Pane>
+
       <Row flex={1}>
         <Column flex={2.2}>
           <Pane
@@ -288,6 +331,18 @@ function summariseFlow(transactions: { amountUsd: number; category: string }[]) 
 }
 
 const styles = StyleSheet.create({
+  notes: {
+    gap: space.md,
+  },
+  note: {
+    flexDirection: "row",
+    gap: space.sm,
+  },
+  noteTick: {
+    width: 3,
+    borderRadius: 2,
+    alignSelf: "stretch",
+  },
   head: {
     flexDirection: "row",
     alignItems: "flex-end",
