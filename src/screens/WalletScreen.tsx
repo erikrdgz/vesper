@@ -50,6 +50,7 @@ export function WalletScreen() {
     activity,
     profile,
     setProfile,
+    logout,
     realisedUsd,
     replaceAssets,
     logActivity,
@@ -142,6 +143,7 @@ export function WalletScreen() {
               <Tile label="Tokens" value={String(tokens)} />
               <Tile label="Following" value={String(watchlist.length)} />
             </View>
+            <Action label="Log out" variant="quiet" onPress={logout} />
           </Pane>
 
           <Pane
@@ -195,13 +197,13 @@ export function WalletScreen() {
               label="Name"
               value={profile.name}
               onChangeText={(name) => setProfile({ name })}
-              placeholder="Leonard Lopez"
+              placeholder="John Doe"
             />
             <Field
               label="Handle"
               value={profile.handle}
               onChangeText={(handle) => setProfile({ handle })}
-              placeholder="@leonardlopez"
+              placeholder="@johndoe"
             />
             <Txt variant="caption" tone="textMuted">
               Stored in this browser. There is no account to sign in to and nothing is sent

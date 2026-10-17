@@ -246,7 +246,7 @@ function CommandTab({
 function Profile() {
   const [open, setOpen] = useState(false);
   const { setTab } = useNavigation();
-  const { assets, profile } = useVesper();
+  const { assets, profile, logout } = useVesper();
   const netWorth = useNetWorth();
 
   return (
@@ -307,8 +307,18 @@ function Profile() {
             <Txt variant="bodyStrong">Open wallet</Txt>
           </Pressable>
 
+          <Pressable
+            onPress={() => {
+              setOpen(false);
+              logout();
+            }}
+            accessibilityRole="button"
+            style={styles.popoverAction}
+          >
+            <Txt variant="bodyStrong">Log out</Txt>
+          </Pressable>
           <Txt variant="caption" tone="textMuted">
-            A seeded profile. Vesper has no accounts and no sign-in.
+            Your profile stays saved on this device. Logging out returns to the welcome screen.
           </Txt>
         </View>
       </Modal>

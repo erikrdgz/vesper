@@ -7,12 +7,12 @@
  */
 
 import { useState } from "react";
-import { Pressable, StyleSheet, TextInput, View, type KeyboardTypeOptions } from "react-native";
+import { Pressable, StyleSheet, TextInput, View, type TextInputProps, type KeyboardTypeOptions } from "react-native";
 
 import { color, radius, space, type } from "../theme";
 import { Txt } from "./primitives";
 
-interface FieldProps {
+interface FieldProps extends Pick<TextInputProps, "autoComplete" | "autoCapitalize" | "maxLength" | "onSubmitEditing" | "returnKeyType"> {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
@@ -32,6 +32,7 @@ export function Field({
   keyboardType,
   error,
   prefix,
+  ...inputProps
 }: FieldProps) {
   const [focused, setFocused] = useState(false);
 
@@ -53,6 +54,7 @@ export function Field({
           </Txt>
         ) : null}
         <TextInput
+          {...inputProps}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}

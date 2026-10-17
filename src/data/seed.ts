@@ -130,7 +130,7 @@ export const seedTransactions: Transaction[] = [
 
 /** Who the seeded book belongs to, until someone changes it. */
 export const SEED_PROFILE: Profile = {
-  name: "Leonard Lopez",
-  handle: "@leonardlopez",
+  name: "John Doe",
+  handle: "@johndoe",
   plan: "Standard",
 };

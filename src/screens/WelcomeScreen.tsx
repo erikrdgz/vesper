@@ -1,20 +1,18 @@
 /**
  * The welcome.
  *
- * Before this, the app opened straight onto a dense grid of someone
- * else's money and greeted you as Leonard Lopez. Three questions fix
- * that: here is what this is, what should we call you, and would you
- * rather look around a sample book or start with your own.
+ * Introduce the app, save a name, then choose a sample or empty book.
  *
  * It runs once. Every step is skippable, because an onboarding you
  * cannot leave is a toll booth.
  */
 
 import { useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, View } from "react-native";
+import { Animated, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
+import { DEFAULT_NAME, profileForName } from "../lib/profile";
 import { usd } from "../lib/format";
 import { color, duration, ease, nativeDriver, radius, space } from "../theme";
 import { VesperMark } from "../components/brand";
@@ -28,34 +26,37 @@ const STEPS = ["what", "who", "how"] as const;
 type Step = (typeof STEPS)[number];
 
 export function WelcomeScreen() {
-  const { finishOnboarding } = useVesper();
+  const { finishOnboarding, profile, setProfile, reduceMotion } = useVesper();
   const { isDesktop } = useResponsive();
 
   const [step, setStep] = useState<Step>("what");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(profile.name === DEFAULT_NAME ? "" : profile.name);
   const fade = useRef(new Animated.Value(1)).current;
 
   const index = STEPS.indexOf(step);
 
-  /** Cross-fade between steps so the panel does not jump. */
   function go(next: Step) {
-    Animated.sequence([
-      Animated.timing(fade, {
-        toValue: 0,
-        duration: duration.micro,
-        easing: ease.exit,
-        useNativeDriver: nativeDriver,
-      }),
-      Animated.timing(fade, {
-        toValue: 1,
-        duration: duration.short,
-        easing: ease.entrance,
-        useNativeDriver: nativeDriver,
-      }),
-    ]).start();
-    // Swap the content at the midpoint rather than after, so the fade
-    // out covers the change.
-    setTimeout(() => setStep(next), duration.micro);
+    fade.stopAnimation();
+    setStep(next);
+    if (reduceMotion) {
+      fade.setValue(1);
+      return;
+    }
+    fade.setValue(0);
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: duration.short,
+      easing: ease.entrance,
+      useNativeDriver: nativeDriver,
+    }).start();
+  }
+
+  function next() {
+    if (step === "who") {
+      setProfile(profileForName(name, profile));
+      Keyboard.dismiss();
+    }
+    go(STEPS[index + 1]!);
   }
 
   const seededTotal = seedAssets.reduce(
@@ -64,135 +65,141 @@ export function WelcomeScreen() {
   );
 
   return (
-    <View style={styles.root}>
-      <View style={[styles.panel, isDesktop && styles.panelDesktop]}>
-        <View style={styles.head}>
-          <VesperMark size={30} />
-          <View style={styles.dots}>
-            {STEPS.map((id, i) => (
-              <View key={id} style={[styles.dot, i <= index && styles.dotOn]} />
-            ))}
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
+        <View style={[styles.panel, isDesktop && styles.panelDesktop]}>
+          <View style={styles.head}>
+            <VesperMark size={30} />
+            <View style={styles.dots}>
+              {STEPS.map((id, i) => (
+                <View key={id} style={[styles.dot, i <= index && styles.dotOn]} />
+              ))}
+            </View>
+          </View>
+
+          <Animated.View style={{ opacity: fade }}>
+            {step === "what" && (
+              <View style={styles.body}>
+                <Txt variant="h1" heading style={[styles.heading, isDesktop && styles.headingDesktop]}>
+                  Two kinds of money, one page
+                </Txt>
+                <Txt variant="body" tone="textSecondary">
+                  A bank balance is worth what the bank says. Half a Bitcoin is worth whatever the
+                  last trade says, and that number is stale by the time it finishes rendering.
+                </Txt>
+                <Txt variant="body" tone="textSecondary">
+                  Vesper keeps those apart all the way down, and tells you which is which on every
+                  screen.
+                </Txt>
+
+                <View style={styles.facts}>
+                  <Fact icon={<WalletIcon size={16} tone={color.accent} />} text="Connects to no bank and holds no keys" />
+                  <Fact icon={<WatchIcon size={16} tone={color.accent} />} text="Live crypto prices from CoinGecko" />
+                  <Fact icon={<ArrowUpRightIcon size={16} tone={color.accent} />} text="Everything stays on this device" />
+                </View>
+              </View>
+            )}
+
+            {step === "who" && (
+              <View style={styles.body}>
+                <Txt variant="h1" heading style={[styles.heading, isDesktop && styles.headingDesktop]}>
+                  What should we call you?
+                </Txt>
+                <Txt variant="body" tone="textSecondary">
+                  Only so the app can greet you properly. It is stored on this device and sent
+                  nowhere — there is no account to make.
+                </Txt>
+                <Field
+                  label="Your name"
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="John Doe"
+                  autoComplete="name"
+                  autoCapitalize="words"
+                  maxLength={80}
+                  returnKeyType="next"
+                  onSubmitEditing={next}
+                />
+                <Txt variant="caption" tone="textMuted">
+                  Skip or leave this blank to use John Doe.
+                </Txt>
+              </View>
+            )}
+
+            {step === "how" && (
+              <View style={styles.body}>
+                <Txt variant="h1" heading style={[styles.heading, isDesktop && styles.headingDesktop]}>
+                  Where would you like to start?
+                </Txt>
+
+                <Pressable
+                  onPress={() => finishOnboarding(name, false)}
+                  accessibilityRole="button"
+                  style={[styles.choice, styles.choicePrimary]}
+                >
+                  <View style={styles.choiceHead}>
+                    <Txt variant="title" tone="accentInk">
+                      Explore a sample book
+                    </Txt>
+                    <View style={styles.coins}>
+                      {["BTC", "ETH", "SOL"].map((symbol) => (
+                        <CoinMark key={symbol} symbol={symbol} size={20} />
+                      ))}
+                    </View>
+                  </View>
+                  <Txt variant="caption" style={styles.onLime}>
+                    Five accounts and four tokens, about {usd(seededTotal)} in stated balances, with
+                    real prices on the crypto. Edit any of it.
+                  </Txt>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => finishOnboarding(name, true)}
+                  accessibilityRole="button"
+                  style={styles.choice}
+                >
+                  <Txt variant="title">Start with an empty book</Txt>
+                  <Txt variant="caption" tone="textMuted">
+                    Nothing but the watchlist. Add your own accounts and holdings as you go.
+                  </Txt>
+                </Pressable>
+              </View>
+            )}
+          </Animated.View>
+
+          <View style={styles.foot}>
+            {index > 0 && (
+              <Pressable
+                onPress={() => go(STEPS[index - 1]!)}
+                accessibilityRole="button"
+                style={styles.back}
+              >
+                <Txt variant="micro" tone="textMuted">
+                  BACK
+                </Txt>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => finishOnboarding(name, false)}
+              accessibilityRole="button"
+              style={styles.back}
+            >
+              <Txt variant="micro" tone="textMuted">
+                Skip welcome
+              </Txt>
+            </Pressable>
+
+            {step !== "how" && (
+              <Action
+                label={step === "what" ? "Start" : "Next"}
+                variant="primary"
+                onPress={next}
+              />
+            )}
           </View>
         </View>
-
-        <Animated.View style={{ opacity: fade }}>
-          {step === "what" && (
-            <View style={styles.body}>
-              <Txt variant="h1" heading>
-                Two kinds of money, one page
-              </Txt>
-              <Txt variant="body" tone="textSecondary">
-                A bank balance is worth what the bank says. Half a Bitcoin is worth whatever the
-                last trade says, and that number is stale by the time it finishes rendering.
-              </Txt>
-              <Txt variant="body" tone="textSecondary">
-                Vesper keeps those apart all the way down, and tells you which is which on every
-                screen.
-              </Txt>
-
-              <View style={styles.facts}>
-                <Fact icon={<WalletIcon size={16} tone={color.accent} />} text="Connects to no bank and holds no keys" />
-                <Fact icon={<WatchIcon size={16} tone={color.accent} />} text="Live crypto prices from CoinGecko" />
-                <Fact icon={<ArrowUpRightIcon size={16} tone={color.accent} />} text="Everything stays in this browser" />
-              </View>
-            </View>
-          )}
-
-          {step === "who" && (
-            <View style={styles.body}>
-              <Txt variant="h1" heading>
-                What should we call you?
-              </Txt>
-              <Txt variant="body" tone="textSecondary">
-                Only so the app can greet you properly. It is stored in this browser and sent
-                nowhere — there is no account to make.
-              </Txt>
-              <Field
-                label="Your name"
-                value={name}
-                onChangeText={setName}
-                placeholder="Alex"
-              />
-              <Txt variant="caption" tone="textMuted">
-                Leave it blank and Vesper will keep the sample profile.
-              </Txt>
-            </View>
-          )}
-
-          {step === "how" && (
-            <View style={styles.body}>
-              <Txt variant="h1" heading>
-                Where would you like to start?
-              </Txt>
-
-              <Pressable
-                onPress={() => finishOnboarding(name, false)}
-                accessibilityRole="button"
-                style={[styles.choice, styles.choicePrimary]}
-              >
-                <View style={styles.choiceHead}>
-                  <Txt variant="title" tone="accentInk">
-                    Explore a sample book
-                  </Txt>
-                  <View style={styles.coins}>
-                    {["BTC", "ETH", "SOL"].map((symbol) => (
-                      <CoinMark key={symbol} symbol={symbol} size={20} />
-                    ))}
-                  </View>
-                </View>
-                <Txt variant="caption" style={styles.onLime}>
-                  Five accounts and four tokens, about {usd(seededTotal)} in stated balances, with
-                  real prices on the crypto. Edit any of it.
-                </Txt>
-              </Pressable>
-
-              <Pressable
-                onPress={() => finishOnboarding(name, true)}
-                accessibilityRole="button"
-                style={styles.choice}
-              >
-                <Txt variant="title">Start with an empty book</Txt>
-                <Txt variant="caption" tone="textMuted">
-                  Nothing but the watchlist. Add your own accounts and holdings as you go.
-                </Txt>
-              </Pressable>
-            </View>
-          )}
-        </Animated.View>
-
-        <View style={styles.foot}>
-          {index > 0 ? (
-            <Pressable
-              onPress={() => go(STEPS[index - 1]!)}
-              accessibilityRole="button"
-              style={styles.back}
-            >
-              <Txt variant="micro" tone="textMuted">
-                BACK
-              </Txt>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => finishOnboarding("", false)}
-              accessibilityRole="button"
-              style={styles.back}
-            >
-              <Txt variant="micro" tone="textMuted">
-                SKIP
-              </Txt>
-            </Pressable>
-          )}
-
-          {step !== "how" && (
-            <Action
-              label={step === "what" ? "Start" : "Next"}
-              variant="primary"
-              onPress={() => go(STEPS[index + 1]!)}
-            />
-          )}
-        </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -209,7 +216,7 @@ function Fact({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: color.ground,
     alignItems: "center",
     justifyContent: "center",
@@ -246,6 +253,8 @@ const styles = StyleSheet.create({
   dotOn: {
     backgroundColor: color.accent,
   },
+  heading: { fontSize: 28, lineHeight: 34, letterSpacing: -0.6 },
+  headingDesktop: { fontSize: 34, lineHeight: 40, letterSpacing: -1 },
   body: {
     gap: space.sm,
   },
@@ -297,6 +306,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   back: {
+    minHeight: 44,
+    justifyContent: "center",
     paddingVertical: space.xs,
     paddingHorizontal: space.xs,
   },

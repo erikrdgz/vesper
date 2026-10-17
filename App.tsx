@@ -6,7 +6,6 @@
  * the responsive contract in `src/components/AppShell`.
  */
 
-import { useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 
@@ -72,19 +71,18 @@ function Router() {
  * clicks through, the data is already warm.
  */
 function Gate() {
-  const [entered, setEntered] = useState(false);
-  const { hydrated, onboarded } = useVesper();
+  const { hydrated, entryStage, enterSession, skipWelcome } = useVesper();
 
-  if (!entered) {
+  if (!hydrated || entryStage === "intro") {
     return (
       <View style={styles.root}>
         <StatusBar style="light" />
-        <IntroScreen onEnter={() => setEntered(true)} />
+        <IntroScreen onEnter={enterSession} onSkip={skipWelcome} ready={hydrated} />
       </View>
     );
   }
 
-  if (hydrated && !onboarded) {
+  if (entryStage === "setup") {
     return (
       <View style={styles.root}>
         <StatusBar style="light" />
@@ -96,16 +94,20 @@ function Gate() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <AppShell>
-        <Transitioned />
-      </AppShell>
-      <ActionsSheet />
-      <AddAssetSheet />
-      <SwapSheet />
-      <AlertSheet />
-      <SendSheet />
-      <PositionSheet />
-      <ShortcutsSheet />
+      <NavigationProvider>
+        <ToastProvider>
+          <AppShell>
+            <Transitioned />
+          </AppShell>
+          <ActionsSheet />
+          <AddAssetSheet />
+          <SwapSheet />
+          <AlertSheet />
+          <SendSheet />
+          <PositionSheet />
+          <ShortcutsSheet />
+        </ToastProvider>
+      </NavigationProvider>
     </View>
   );
 }
@@ -124,11 +126,7 @@ function Transitioned() {
 export default function App() {
   return (
     <VesperProvider>
-      <NavigationProvider>
-        <ToastProvider>
-          <Gate />
-        </ToastProvider>
-      </NavigationProvider>
+      <Gate />
     </VesperProvider>
   );
 }

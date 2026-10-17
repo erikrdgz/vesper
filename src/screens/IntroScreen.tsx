@@ -14,8 +14,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 
+import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
-import { firstName, greeting } from "../lib/format";
 import { color, duration, ease, nativeDriver, radius, space, type } from "../theme";
 import { VesperMark, VesperStroke } from "../components/brand";
 import { Txt } from "../components/primitives";
@@ -33,8 +33,13 @@ const CUE = {
   enter: 1700,
 };
 
-export function IntroScreen({ onEnter }: { onEnter: () => void }) {
-  const { reduceMotion, profile } = useVesper();
+export function IntroScreen({ onEnter, onSkip, ready }: {
+  onEnter: () => void;
+  onSkip: () => void;
+  ready: boolean;
+}) {
+  const { reduceMotion } = useVesper();
+  const { isDesktop } = useResponsive();
   const [leaving, setLeaving] = useState(false);
 
   /**
@@ -130,7 +135,7 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
   }, [reduceMotion, left, right, letters, rule, tagline, enter]);
 
   function handleEnter() {
-    if (leaving) return;
+    if (leaving || !ready) return;
     setLeaving(true);
 
     if (reduceMotion) {
@@ -157,93 +162,115 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
   });
 
   return (
-    <Pressable
-      style={styles.root}
-      onPress={handleEnter}
-      accessibilityRole="button"
-      accessibilityLabel="Enter Vesper"
-    >
-      <Animated.View
-        style={[
-          styles.stage,
-          {
-            opacity: exit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-            transform: [
-              { scale: exit.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
-            ],
-          },
-        ]}
+    <View style={styles.container}>
+      <Pressable
+        style={styles.root}
+        disabled={!ready || leaving}
+        accessibilityState={{ disabled: !ready || leaving }}
+        onPress={handleEnter}
+        accessibilityRole="button"
+        accessibilityLabel="Enter Vesper"
       >
-        <View style={styles.mark}>
-          {joined ? (
-            <VesperMark size={MARK} />
-          ) : (
-            <>
-              <Animated.View style={[styles.stroke, strokeStyle(left, -22)]}>
-                <VesperStroke side="left" size={MARK} />
-              </Animated.View>
-              <Animated.View style={[styles.stroke, strokeStyle(right, 22)]}>
-                <VesperStroke side="right" size={MARK} />
-              </Animated.View>
-            </>
-          )}
-        </View>
-
-        <View style={styles.word}>
-          {LETTERS.map((letter, index) => (
-            <Animated.Text
-              key={index}
-              style={[
-                styles.letter,
-                {
-                  opacity: letters[index],
-                  transform: [
-                    {
-                      translateY: letters[index]!.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [14, 0],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              {letter}
-            </Animated.Text>
-          ))}
-        </View>
-
-        <Animated.View style={[styles.rule, { transform: [{ scaleX: rule }] }]} />
-
-        <Animated.View style={{ opacity: tagline }}>
-          <Txt variant="h2" style={styles.welcome}>
-            {greeting()}, {firstName(profile.name)}
-          </Txt>
-          <Txt variant="caption" tone="textSecondary" style={styles.tagline}>
-            Bank balances and crypto in one place, honest about the difference.
-          </Txt>
-        </Animated.View>
-
         <Animated.View
-          style={{
-            opacity: enter,
-            transform: [
-              { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-            ],
-          }}
+          style={[
+            styles.stage,
+            {
+              opacity: exit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+              transform: [
+                { scale: exit.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
+              ],
+            },
+          ]}
         >
-          <View style={styles.enter}>
-            <Txt variant="micro" tone="accentInk">
-              ENTER
-            </Txt>
+          <View style={styles.mark}>
+            {joined ? (
+              <VesperMark size={MARK} />
+            ) : (
+              <>
+                <Animated.View style={[styles.stroke, strokeStyle(left, -22)]}>
+                  <VesperStroke side="left" size={MARK} />
+                </Animated.View>
+                <Animated.View style={[styles.stroke, strokeStyle(right, 22)]}>
+                  <VesperStroke side="right" size={MARK} />
+                </Animated.View>
+              </>
+            )}
           </View>
+
+          <View style={styles.word}>
+            {LETTERS.map((letter, index) => (
+              <Animated.Text
+                key={index}
+                style={[
+                  styles.letter,
+                  {
+                    opacity: letters[index],
+                    transform: [
+                      {
+                        translateY: letters[index]!.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [14, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                {letter}
+              </Animated.Text>
+            ))}
+          </View>
+
+          <Animated.View style={[styles.rule, { transform: [{ scaleX: rule }] }]} />
+
+          <Animated.View style={{ opacity: tagline }}>
+            <Txt variant="h1" heading style={[styles.welcome, isDesktop && styles.welcomeDesktop]}>
+              Welcome to Vesper
+            </Txt>
+            <Txt variant="body" tone="textSecondary" style={[styles.tagline, isDesktop && styles.taglineDesktop]}>
+              Bank balances and crypto in one place, honest about the difference.
+            </Txt>
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              opacity: enter,
+              transform: [
+                { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+              ],
+            }}
+          >
+            <View style={styles.enter}>
+              <Txt variant="bodyStrong" tone="accentInk">
+                {ready ? "ENTER" : "LOADING…"}
+              </Txt>
+            </View>
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
-    </Pressable>
+      </Pressable>
+      <Pressable
+        onPress={onSkip}
+        disabled={!ready || leaving}
+        accessibilityRole="button"
+        accessibilityLabel="Skip welcome"
+        accessibilityState={{ disabled: !ready || leaving }}
+        style={styles.skip}
+      >
+        <Txt variant="caption" tone="textSecondary">Skip welcome</Txt>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: color.ground },
+  skip: {
+    alignSelf: "center",
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: space.lg,
+    marginBottom: space.lg,
+  },
   root: {
     flex: 1,
     backgroundColor: color.ground,
@@ -254,7 +281,7 @@ const styles = StyleSheet.create({
   stage: {
     alignItems: "center",
     width: "100%",
-    maxWidth: 420,
+    maxWidth: 620,
   },
   mark: {
     width: MARK,
@@ -287,14 +314,23 @@ const styles = StyleSheet.create({
     marginVertical: space.md,
   },
   welcome: {
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.8,
     textAlign: "center",
     marginBottom: space.xs,
   },
+  welcomeDesktop: { fontSize: 48, lineHeight: 54, letterSpacing: -1.4 },
   tagline: {
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: "center",
-    maxWidth: 320,
+    maxWidth: 400,
   },
+  taglineDesktop: { fontSize: 18, lineHeight: 27 },
   enter: {
+    minHeight: 48,
+    justifyContent: "center",
     marginTop: space.lg,
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,

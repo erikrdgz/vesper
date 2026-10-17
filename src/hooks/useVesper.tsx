@@ -30,6 +30,7 @@ import { fallbackQuotes, seedAssets, seedTransactions } from "../data/seed";
 import { clearState, loadState, saveState } from "../data/storage";
 import { applySwap, quoteSwap, realisedOn, type SwapError } from "../lib/exchange";
 import { computeNetWorth } from "../lib/netWorth";
+import { profileForName } from "../lib/profile";
 import { recordSnapshot } from "../lib/snapshots";
 import {
   isDeFi,
@@ -53,6 +54,8 @@ export interface UndoableBook {
 }
 
 interface State {
+  /** Session-only: never restored from local storage. */
+  entryStage: "intro" | "setup" | "app";
   hydrated: boolean;
   assets: Asset[];
   transactions: Transaction[];
@@ -111,6 +114,9 @@ type Action =
   | { type: "profile/set"; patch: Partial<Profile> }
   | { type: "snapshot/record"; snapshots: Snapshot[] }
   | { type: "book/restore"; book: UndoableBook }
+  | { type: "session/enter" }
+  | { type: "session/skip" }
+  | { type: "session/logout" }
   | { type: "onboard/finish"; name: string; startEmpty: boolean }
   | { type: "alert/add"; alert: PriceAlert }
   | { type: "alert/remove"; id: string }
@@ -121,6 +127,7 @@ type Action =
   | { type: "reset" };
 
 const initialState: State = {
+  entryStage: "intro",
   hydrated: false,
   assets: seedAssets,
   transactions: seedTransactions,
@@ -240,17 +247,26 @@ function reducer(state: State, action: Action): State {
     case "book/restore":
       return { ...state, ...action.book };
 
+    case "session/enter":
+      return state.hydrated
+        ? { ...state, entryStage: state.onboarded ? "app" : "setup" }
+        : state;
+
+    case "session/skip":
+      return state.hydrated
+        ? { ...state, entryStage: "app", onboarded: true }
+        : state;
+
+    case "session/logout":
+      return { ...state, entryStage: "intro" };
+
     case "onboard/finish": {
-      const name = action.name.trim();
+      if (!state.hydrated) return state;
       return {
         ...state,
         onboarded: true,
-        profile: {
-          ...state.profile,
-          ...(name
-            ? { name, handle: `@${name.toLowerCase().replace(/[^a-z0-9]/g, "")}` }
-            : null),
-        },
+        entryStage: "app",
+        profile: profileForName(action.name, state.profile),
         // Starting empty clears the book but keeps the watchlist, so the
         // first screen still has live prices on it rather than being a
         // blank page with a plus button.
@@ -316,6 +332,9 @@ interface VesperContextValue extends State {
   logActivity: (kind: ActivityEntry["kind"], summary: string) => void;
   setProfile: (patch: Partial<Profile>) => void;
   finishOnboarding: (name: string, startEmpty: boolean) => void;
+  enterSession: () => void;
+  skipWelcome: () => void;
+  logout: () => void;
   /** Swap the whole book out, for a CSV import. */
   replaceAssets: (assets: Asset[]) => void;
   /**
@@ -619,6 +638,9 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
           alert: { ...alert, id: `al-${Date.now()}`, triggeredAt: null },
         }),
       removeAlert: (id) => dispatch({ type: "alert/remove", id }),
+      enterSession: () => dispatch({ type: "session/enter" }),
+      skipWelcome: () => dispatch({ type: "session/skip" }),
+      logout: () => dispatch({ type: "session/logout" }),
       setProfile: (patch) => dispatch({ type: "profile/set", patch }),
       finishOnboarding: (name, startEmpty) =>
         dispatch({ type: "onboard/finish", name, startEmpty }),
