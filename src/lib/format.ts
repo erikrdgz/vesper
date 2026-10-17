@@ -144,3 +144,7 @@ export function greeting(now = new Date()): string {
 
 /** "Leonard Lopez" -> "Leonard". For a greeting, not a label. */
 export const firstName = (full: string): string => full.trim().split(/\s+/)[0] ?? full;
+
+/** "1 position" / "2 positions". Pluralise, or the UI reads as a draft. */
+export const plural = (count: number, one: string, many = `${one}s`): string =>
+  `${count} ${count === 1 ? one : many}`;

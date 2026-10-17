@@ -125,6 +125,7 @@ export async function loadState(): Promise<PersistedState | null> {
         typeof candidate.realisedUsd === "number" && Number.isFinite(candidate.realisedUsd)
           ? candidate.realisedUsd
           : 0,
+      onboarded: candidate.onboarded === true,
       snapshots: Array.isArray(candidate.snapshots)
         ? candidate.snapshots.filter(
             (snapshot) =>

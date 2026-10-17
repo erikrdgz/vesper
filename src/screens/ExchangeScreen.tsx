@@ -27,11 +27,13 @@ import { SwapIcon } from "../components/icons";
 import { Action, Delta, Divider, Tap, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
+import { useToast } from "../components/Toast";
 import { TokenObject } from "../components/TokenObject";
 
 export function ExchangeScreen() {
   const { assets, prices, swap, realisedUsd, activity } = useVesper();
   const { openSheet } = useNavigation();
+  const { toast } = useToast();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
 
@@ -68,9 +70,18 @@ export function ExchangeScreen() {
     if (!from || !to) return;
     if (!valid) return setError("Enter an amount above zero.");
 
+    const received = priced?.ok ? priced.quote.toAmount : null;
     const result = swap(from.id, to.id, parsed);
     if (!result.ok) return setError(SWAP_MESSAGE[result.error]);
 
+    toast(
+      "Swapped",
+      received === null
+        ? undefined
+        : `${tokenAmount(parsed, from.symbol)} for ${tokenAmount(received, to.symbol)}` +
+          (willRealise === null ? "" : ` · realised ${usdSigned(willRealise)}`),
+      willRealise !== null && willRealise < 0 ? "negative" : "positive",
+    );
     setAmount("");
     setError(null);
     setFlipIndex((index) => index + 1);

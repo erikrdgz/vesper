@@ -29,10 +29,12 @@ import { ArrowUpRightIcon } from "../components/icons";
 import { Action, Delta, Divider, Tap, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
+import { useToast } from "../components/Toast";
 
 export function WatchScreen() {
   const { assets, watchlist, prices, toggleWatch, alerts, removeAlert } = useVesper();
   const { openSheet, setTab, openAsset } = useNavigation();
+  const { toast } = useToast();
   const { isDesktop } = useResponsive();
   const [query, setQuery] = useState("");
 
@@ -86,7 +88,14 @@ export function WatchScreen() {
                   holding={held.get(entry.coingeckoId)?.amount ?? null}
                   price={prices.quotes[entry.coingeckoId]?.usd ?? 0}
                   change={prices.quotes[entry.coingeckoId]?.change24h ?? 0}
-                  onToggle={() => toggleWatch(entry.coingeckoId)}
+                  onToggle={() => {
+                    const wasFollowing = watchlist.includes(entry.coingeckoId);
+                    toggleWatch(entry.coingeckoId);
+                    toast(
+                      wasFollowing ? `Unfollowed ${entry.label}` : `Following ${entry.label}`,
+                      wasFollowing ? undefined : "It is in the bar at the top now.",
+                    );
+                  }}
                   onOpen={() => {
                     const asset = held.get(entry.coingeckoId);
                     if (!asset) return;

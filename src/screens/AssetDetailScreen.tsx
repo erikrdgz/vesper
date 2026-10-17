@@ -28,6 +28,7 @@ import { ChevronLeftIcon, TrashIcon } from "../components/icons";
 import { Action, Delta, Divider, Segmented, Tap, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
+import { useToast } from "../components/Toast";
 import { TokenObject } from "../components/TokenObject";
 
 const RANGES = ["1H", "1D", "1W", "1M", "1Y"] as const satisfies readonly ChartRange[];
@@ -35,6 +36,7 @@ const RANGES = ["1H", "1D", "1W", "1M", "1Y"] as const satisfies readonly ChartR
 export function AssetDetailScreen({ assetId }: { assetId: string }) {
   const { assets, prices, updateAsset, removeAsset } = useVesper();
   const { closeAsset } = useNavigation();
+  const { toast } = useToast();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
   const [range, setRange] = useState<ChartRange>("1D");
@@ -88,6 +90,7 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
 
     setError(null);
     updateAsset(assetId, { amount: parsed, costBasisUsd: cost });
+    toast("Position saved", `${tokenAmount(parsed, defi!.symbol)}`, "positive");
   }
 
   const tone = quote && quote.change24h < 0 ? color.negative : color.accent;
@@ -236,6 +239,7 @@ export function AssetDetailScreen({ assetId }: { assetId: string }) {
               icon={<TrashIcon size={16} tone={color.negative} />}
               onPress={() => {
                 removeAsset(assetId);
+                toast(`${defi.label} removed`, "It is out of your book.");
                 closeAsset();
               }}
             />

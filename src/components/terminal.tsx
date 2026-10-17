@@ -246,7 +246,7 @@ function CommandTab({
 function Profile() {
   const [open, setOpen] = useState(false);
   const { setTab } = useNavigation();
-  const { assets } = useVesper();
+  const { assets, profile } = useVesper();
   const netWorth = useNetWorth();
 
   return (
@@ -257,7 +257,7 @@ function Profile() {
         accessibilityLabel="Your profile"
         style={styles.avatarButton}
       >
-        <Avatar name="Leonard Lopez" size={28} />
+        <Avatar name={profile.name} size={28} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -272,11 +272,11 @@ function Profile() {
 
         <View style={styles.popover}>
           <View style={styles.popoverHead}>
-            <Avatar name="Leonard Lopez" size={40} />
+            <Avatar name={profile.name} size={40} />
             <View style={{ flex: 1 }}>
-              <Txt variant="title">Leonard Lopez</Txt>
+              <Txt variant="title">{profile.name}</Txt>
               <Txt variant="caption" tone="textMuted">
-                @leonardlopez · Standard
+                {profile.handle} · {profile.plan}
               </Txt>
             </View>
           </View>

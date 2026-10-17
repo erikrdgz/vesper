@@ -1,7 +1,7 @@
 /**
  * Vesper.
  *
- * Two providers and a switch. Everything interesting is a layer down: the
+ * Providers and three doors. Everything interesting is a layer down: the
  * state engine in `src/hooks/useVesper`, the arithmetic in `src/lib`, and
  * the responsive contract in `src/components/AppShell`.
  */
@@ -11,6 +11,8 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 
 import { AppShell } from "./src/components/AppShell";
+import { ScreenTransition } from "./src/components/ScreenTransition";
+import { ToastProvider } from "./src/components/Toast";
 import {
   ActionsSheet,
   AddAssetSheet,
@@ -19,15 +21,16 @@ import {
   SwapSheet,
 } from "./src/components/sheets";
 import { NavigationProvider, useNavigation } from "./src/hooks/useNavigation";
-import { VesperProvider } from "./src/hooks/useVesper";
+import { VesperProvider, useVesper } from "./src/hooks/useVesper";
 import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
-import { IntroScreen } from "./src/screens/IntroScreen";
 import { AssetDetailScreen } from "./src/screens/AssetDetailScreen";
 import { CryptoScreen } from "./src/screens/CryptoScreen";
 import { ExchangeScreen } from "./src/screens/ExchangeScreen";
+import { IntroScreen } from "./src/screens/IntroScreen";
 import { OverviewScreen } from "./src/screens/OverviewScreen";
 import { WalletScreen } from "./src/screens/WalletScreen";
 import { WatchScreen } from "./src/screens/WatchScreen";
+import { WelcomeScreen } from "./src/screens/WelcomeScreen";
 import { color } from "./src/theme";
 
 function Router() {
@@ -55,34 +58,60 @@ function Router() {
 }
 
 /**
- * The intro sits inside the providers, not outside them.
+ * Three doors, in order: the mark, the welcome, the app.
  *
- * It needs the reduced-motion preference, and the app behind it gets to
- * hydrate and fetch its first prices while the animation plays — so by
- * the time someone clicks through, the dashboard is already warm instead
- * of starting from nothing.
+ * The welcome appears once and only after hydration. Showing it to a
+ * returning visitor for the half second before their save loads would be
+ * worse than not having it at all.
+ *
+ * All of it sits inside the providers, so the dashboard hydrates and
+ * fetches its first prices while the intro plays — by the time anyone
+ * clicks through, the data is already warm.
  */
 function Gate() {
   const [entered, setEntered] = useState(false);
+  const { hydrated, onboarded } = useVesper();
+
+  if (!entered) {
+    return (
+      <View style={styles.root}>
+        <StatusBar style="light" />
+        <IntroScreen onEnter={() => setEntered(true)} />
+      </View>
+    );
+  }
+
+  if (hydrated && !onboarded) {
+    return (
+      <View style={styles.root}>
+        <StatusBar style="light" />
+        <WelcomeScreen />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      {entered ? (
-        <>
-          <AppShell>
-            <Router />
-          </AppShell>
-          <ActionsSheet />
-          <AddAssetSheet />
-          <SwapSheet />
-          <AlertSheet />
-          <SendSheet />
-        </>
-      ) : (
-        <IntroScreen onEnter={() => setEntered(true)} />
-      )}
+      <AppShell>
+        <Transitioned />
+      </AppShell>
+      <ActionsSheet />
+      <AddAssetSheet />
+      <SwapSheet />
+      <AlertSheet />
+      <SendSheet />
     </View>
+  );
+}
+
+/** The router, with the tab change given a direction. */
+function Transitioned() {
+  const { tab, detailId } = useNavigation();
+  return (
+    <ScreenTransition screenKey={detailId ? `detail:${detailId}` : tab}>
+      <Router />
+    </ScreenTransition>
   );
 }
 
@@ -90,7 +119,9 @@ export default function App() {
   return (
     <VesperProvider>
       <NavigationProvider>
-        <Gate />
+        <ToastProvider>
+          <Gate />
+        </ToastProvider>
       </NavigationProvider>
     </VesperProvider>
   );

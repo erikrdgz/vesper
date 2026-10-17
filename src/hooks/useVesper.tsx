@@ -56,6 +56,8 @@ interface State {
   realisedUsd: number;
   /** One recorded net worth per day, oldest first. */
   snapshots: Snapshot[];
+  /** Whether the welcome has been through once. */
+  onboarded: boolean;
   prices: PriceState;
   /** null means "follow the OS". */
   reduceMotionOverride: boolean | null;
@@ -73,6 +75,7 @@ type Action =
       profile: Profile;
       realisedUsd: number;
       snapshots: Snapshot[];
+      onboarded: boolean;
       quotes: QuoteMap | null;
       fetchedAt: number | null;
       reduceMotion: boolean | null;
@@ -89,6 +92,7 @@ type Action =
   | { type: "realised/add"; amountUsd: number }
   | { type: "profile/set"; patch: Partial<Profile> }
   | { type: "snapshot/record"; snapshots: Snapshot[] }
+  | { type: "onboard/finish"; name: string; startEmpty: boolean }
   | { type: "alert/add"; alert: PriceAlert }
   | { type: "alert/remove"; id: string }
   | { type: "alert/trigger"; id: string; at: number }
@@ -107,6 +111,7 @@ const initialState: State = {
   profile: SEED_PROFILE,
   realisedUsd: 0,
   snapshots: [],
+  onboarded: false,
   prices: {
     quotes: fallbackQuotes,
     source: "fallback",
@@ -133,6 +138,7 @@ function reducer(state: State, action: Action): State {
         profile: action.profile,
         realisedUsd: action.realisedUsd,
         snapshots: action.snapshots,
+        onboarded: action.onboarded,
         reduceMotionOverride: action.reduceMotion,
         prices: hasCache
           ? {
@@ -210,6 +216,26 @@ function reducer(state: State, action: Action): State {
     case "snapshot/record":
       return { ...state, snapshots: action.snapshots };
 
+    case "onboard/finish": {
+      const name = action.name.trim();
+      return {
+        ...state,
+        onboarded: true,
+        profile: {
+          ...state.profile,
+          ...(name
+            ? { name, handle: `@${name.toLowerCase().replace(/[^a-z0-9]/g, "")}` }
+            : null),
+        },
+        // Starting empty clears the book but keeps the watchlist, so the
+        // first screen still has live prices on it rather than being a
+        // blank page with a plus button.
+        ...(action.startEmpty
+          ? { assets: [], transactions: [], snapshots: [], activity: [], realisedUsd: 0 }
+          : null),
+      };
+    }
+
     case "alert/add":
       return { ...state, alerts: [action.alert, ...state.alerts] };
 
@@ -265,6 +291,7 @@ interface VesperContextValue extends State {
   removeAlert: (id: string) => void;
   logActivity: (kind: ActivityEntry["kind"], summary: string) => void;
   setProfile: (patch: Partial<Profile>) => void;
+  finishOnboarding: (name: string, startEmpty: boolean) => void;
   setReduceMotion: (value: boolean | null) => void;
   resetToSeed: () => Promise<void>;
 }
@@ -292,6 +319,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
         profile: persisted?.profile ?? SEED_PROFILE,
         realisedUsd: persisted?.realisedUsd ?? 0,
         snapshots: persisted?.snapshots ?? [],
+        onboarded: persisted?.onboarded ?? false,
         transactions: persisted?.transactions ?? seedTransactions,
         watchlist: persisted?.watchlist?.length ? persisted.watchlist : seedWatchlist,
         quotes: persisted?.quotes ?? null,
@@ -318,6 +346,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       profile: state.profile,
       realisedUsd: state.realisedUsd,
       snapshots: state.snapshots,
+      onboarded: state.onboarded,
       quotes: state.prices.source === "fallback" ? null : state.prices.quotes,
       quotesFetchedAt: state.prices.fetchedAt,
       reduceMotion: state.reduceMotionOverride,
@@ -332,6 +361,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
     state.profile,
     state.realisedUsd,
     state.snapshots,
+    state.onboarded,
     state.prices.quotes,
     state.prices.source,
     state.prices.fetchedAt,
@@ -549,6 +579,8 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
         }),
       removeAlert: (id) => dispatch({ type: "alert/remove", id }),
       setProfile: (patch) => dispatch({ type: "profile/set", patch }),
+      finishOnboarding: (name, startEmpty) =>
+        dispatch({ type: "onboard/finish", name, startEmpty }),
       logActivity: (kind, summary) =>
         dispatch({
           type: "activity/log",

@@ -21,6 +21,7 @@ import { ChoiceRow, Field } from "./Field";
 import { ChevronRightIcon } from "./icons";
 import { Action, Divider, Txt } from "./primitives";
 import { Sheet } from "./Sheet";
+import { useToast } from "./Toast";
 
 const KINDS: { value: TradFiKind; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -47,6 +48,7 @@ function parseAmount(raw: string): number | null {
 export function AddAssetSheet() {
   const { sheet, closeSheet } = useNavigation();
   const { addAsset, refreshPrices } = useVesper();
+  const { toast } = useToast();
 
   const [bucket, setBucket] = useState<"tradfi" | "defi">("tradfi");
   const [institution, setInstitution] = useState("");
@@ -92,6 +94,7 @@ export function AddAssetSheet() {
           : null),
       };
       addAsset(asset);
+      toast(`${asset.label} added`, `${usd(parsed!)} ${kind === "credit" ? "owed" : "in"}`, "positive");
     } else {
       const parsed = parseAmount(amount);
       if (parsed === null) next.amount = "Enter how many tokens you hold.";
@@ -112,6 +115,7 @@ export function AddAssetSheet() {
       // A new token has no quote until the next fetch, and an asset that
       // reads "No price" the moment you add it looks broken.
       refreshPrices({ force: true });
+      toast(`${entry.label} added`, `${tokenAmount(parsed!, entry.symbol)} now in your book`, "positive");
     }
 
     reset();
@@ -223,6 +227,7 @@ export function AddAssetSheet() {
 export function SendSheet() {
   const { sheet, closeSheet } = useNavigation();
   const { assets, updateAsset, addTransaction } = useVesper();
+  const { toast } = useToast();
 
   const [payee, setPayee] = useState("");
   const [amount, setAmount] = useState("");
@@ -260,6 +265,7 @@ export function SendSheet() {
       category: "transfer",
     });
 
+    toast("Transfer recorded", `${usd(parsed!)} to ${payee.trim()}`);
     setPayee("");
     setAmount("");
     setErrors({});
@@ -413,6 +419,7 @@ export function ActionsSheet() {
 export function SwapSheet() {
   const { sheet, closeSheet } = useNavigation();
   const { assets, prices, swap } = useVesper();
+  const { toast } = useToast();
 
   const tokens = useMemo(() => assets.filter(isDeFi), [assets]);
   const [fromId, setFromId] = useState<string>("");
@@ -433,9 +440,17 @@ export function SwapSheet() {
     if (!from || !to) return;
     if (parsed === null) return setError("Enter an amount above zero.");
 
+    const priced = quoteSwap(assets, from.id, to.id, parsed, prices.quotes);
     const result = swap(from.id, to.id, parsed);
     if (!result.ok) return setError(SWAP_MESSAGE[result.error]);
 
+    toast(
+      "Swapped",
+      priced.ok
+        ? `${tokenAmount(parsed, from.symbol)} for ${tokenAmount(priced.quote.toAmount, to.symbol)}`
+        : undefined,
+      "positive",
+    );
     setAmount("");
     setError(null);
     closeSheet();
@@ -540,6 +555,7 @@ function PreviewRow({
 export function AlertSheet() {
   const { sheet, closeSheet } = useNavigation();
   const { assets, watchlist, prices, addAlert } = useVesper();
+  const { toast } = useToast();
 
   // Anything held or followed is worth alerting on.
   const options = useMemo(() => {
@@ -566,6 +582,7 @@ export function AlertSheet() {
       direction,
       priceUsd: parsed,
     });
+    toast("Alert armed", `${entry.symbol} ${direction} ${usd(parsed)}`);
     setPrice("");
     setError(null);
     closeSheet();

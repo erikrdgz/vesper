@@ -22,6 +22,7 @@ import {
   pct,
   transactionDate,
   usd,
+  plural,
   usdParts,
   usdSigned,
   weight,
@@ -32,8 +33,15 @@ import { Column, Row, Screen } from "../components/AppShell";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { AllocationBar, AreaChart, BarRow, Sparkline } from "../components/Chart";
 import { useChangeFlash } from "../hooks/useInteraction";
-import { ChevronRightIcon } from "../components/icons";
-import { Avatar, Delta, Divider, Tap, Txt } from "../components/primitives";
+import {
+  AnalyticsIcon,
+  ChevronRightIcon,
+  PlusIcon,
+  SwapIcon,
+  WalletIcon,
+  WatchIcon,
+} from "../components/icons";
+import { Action, Avatar, Delta, Divider, Tap, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
 import { TokenObject, tokenColor } from "../components/TokenObject";
@@ -43,7 +51,7 @@ const RANGE: ChartRange = "1W";
 export function OverviewScreen() {
   const netWorth = useNetWorth();
   const { transactions, profile } = useVesper();
-  const { setTab } = useNavigation();
+  const { setTab, openSheet } = useNavigation();
   const { isDesktop } = useResponsive();
   const series = usePortfolioSeries(RANGE);
 
@@ -55,13 +63,11 @@ export function OverviewScreen() {
 
   const flow = useMemo(() => summariseFlow(transactions), [transactions]);
   const balance = usdParts(netWorth.totalUsd);
+  const empty = netWorth.valued.length === 0;
 
-  return (
-    <Screen>
-      {/* The wallet-style greeting. On a phone this is the first thing
-          above the fold, which is what makes the screen read as yours
-          rather than as a report about you. */}
-      {!isDesktop && (
+  if (empty) {
+    return (
+      <Screen>
         <Pane>
           <View style={styles.greet}>
             <View style={{ flex: 1 }}>
@@ -81,7 +87,65 @@ export function OverviewScreen() {
             </Tap>
           </View>
         </Pane>
-      )}
+
+        <Pane flex={1} minHeight={isDesktop ? undefined : 360}>
+          <View style={styles.emptyState}>
+            <View style={styles.emptyMark}>
+              <WalletIcon size={26} tone={color.accent} />
+            </View>
+            <Txt variant="h2" heading>
+              Your book is empty
+            </Txt>
+            <Txt variant="body" tone="textSecondary" style={styles.emptyCopy}>
+              Add a bank account, a brokerage or a token and Vesper will start valuing it. Stated
+              balances are taken at face value; tokens are priced live and marked to market.
+            </Txt>
+            <View style={styles.emptyActions}>
+              <Action
+                label="Add your first asset"
+                variant="primary"
+                onPress={() => openSheet("add-asset")}
+              />
+              <Action label="Browse the watchlist" onPress={() => setTab("watch")} />
+            </View>
+            <Txt variant="caption" tone="textMuted" style={styles.emptyCopy}>
+              Nothing you enter leaves this browser.
+            </Txt>
+          </View>
+        </Pane>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen>
+      {/* The greeting goes on both breakpoints. Opening a desktop
+          straight onto a grid of nine positions was the coldest thing
+          the app did; a line that says who this is for costs one row. */}
+      <Pane>
+        <View style={styles.greet}>
+          <View style={{ flex: 1 }}>
+            <Txt variant="caption" tone="textMuted">
+              {greeting()}
+            </Txt>
+            <Txt variant="h1" heading>
+              {firstName(profile.name)}
+            </Txt>
+          </View>
+          {empty ? null : (
+            <Txt variant="caption" tone="textMuted">
+              {plural(netWorth.valued.length, "position")} · {plural(holdings.length, "token")}
+            </Txt>
+          )}
+          <Tap
+            onPress={() => setTab("wallet")}
+            accessibilityRole="button"
+            accessibilityLabel="Open your wallet"
+          >
+            <Avatar name={profile.name} size={44} />
+          </Tap>
+        </View>
+      </Pane>
 
       <Row flex={1}>
         <Column flex={2.2}>
@@ -119,7 +183,36 @@ export function OverviewScreen() {
                 on {usd(netWorth.costUsd)} invested
               </Txt>
             </View>
-            <ChartFill points={series.points} loading={series.loading} />
+
+            {/* Something to do, right under the number. The hero used to
+                be a figure and a chart and no way to act on either. */}
+            <View style={styles.quickRow}>
+              <Quick
+                label="Add"
+                icon={<PlusIcon size={18} tone={color.accent} />}
+                onPress={() => openSheet("add-asset")}
+              />
+              <Quick
+                label="Swap"
+                icon={<SwapIcon size={18} tone={color.accent} />}
+                onPress={() => setTab("exchange")}
+              />
+              <Quick
+                label="Watch"
+                icon={<WatchIcon size={18} tone={color.accent} />}
+                onPress={() => setTab("watch")}
+              />
+              <Quick
+                label="Charts"
+                icon={<AnalyticsIcon size={18} tone={color.accent} />}
+                onPress={() => setTab("analytics")}
+              />
+            </View>
+            <ChartFill
+              points={series.points}
+              loading={series.loading}
+              flat={netWorth.deFiUsd === 0}
+            />
           </Pane>
 
           <Row flex={1}>
@@ -196,9 +289,34 @@ export function OverviewScreen() {
 
 /* ------------------------------------------------------------------ */
 
-/** The chart, sized to whatever the pane left over. */
-function ChartFill({ points, loading }: { points: { t: number; v: number }[]; loading: boolean }) {
+/**
+ * The chart, sized to whatever the pane left over.
+ *
+ * With no tokens held the series is a flat line at the stated balance,
+ * which is arithmetically right and looks like a rendering failure. A
+ * book of only stated balances gets a sentence instead.
+ */
+function ChartFill({
+  points,
+  loading,
+  flat,
+}: {
+  points: { t: number; v: number }[];
+  loading: boolean;
+  flat: boolean;
+}) {
   const measured = useMeasure();
+
+  if (flat) {
+    return (
+      <View style={[styles.chartFill, styles.chartEmpty]}>
+        <Txt variant="caption" tone="textMuted" style={styles.chartEmptyCopy}>
+          Stated balances do not move on their own, so there is no line to draw yet. Add a token
+          and this starts tracking live.
+        </Txt>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.chartFill} onLayout={measured.onLayout}>
@@ -251,6 +369,28 @@ function FlowFill({ flow }: { flow: ReturnType<typeof summariseFlow> }) {
         <BarRow values={flow.byCategory} width={measured.width} height={44} />
       )}
     </View>
+  );
+}
+
+/** A circular quick action, as the references use under a balance. */
+function Quick({
+  label,
+  icon,
+  onPress,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onPress: () => void;
+}) {
+  return (
+    <Tap onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={{ flex: 1 }}>
+      <View style={styles.quick}>
+        <View style={styles.quickIcon}>{icon}</View>
+        <Txt variant="micro" tone="textSecondary">
+          {label}
+        </Txt>
+      </View>
+    </Tap>
   );
 }
 
@@ -429,11 +569,66 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: space.sm,
   },
+  quickRow: {
+    flexDirection: "row",
+    gap: space.xs,
+    marginTop: space.sm,
+  },
+  quick: {
+    alignItems: "center",
+    gap: space.xxs,
+  },
+  quickIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.cardRaised,
+    borderWidth: 1,
+    borderColor: color.hairline,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    paddingVertical: space.xxl,
+  },
+  emptyMark: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.accentSoft,
+    marginBottom: space.xs,
+  },
+  emptyCopy: {
+    textAlign: "center",
+    maxWidth: 380,
+  },
+  emptyActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: space.xs,
+    marginTop: space.xs,
+  },
   returnRow: {
     flexDirection: "row",
     alignItems: "baseline",
     flexWrap: "wrap",
     gap: space.xs,
+  },
+  chartEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: space.lg,
+  },
+  chartEmptyCopy: {
+    textAlign: "center",
+    maxWidth: 360,
   },
   chartFill: {
     flex: 1,

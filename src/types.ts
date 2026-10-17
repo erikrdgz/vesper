@@ -277,6 +277,13 @@ export interface PersistedState {
   realisedUsd: number;
   /** One recorded net worth per day, oldest first. */
   snapshots: Snapshot[];
+  /**
+   * Whether the welcome has been through once.
+   *
+   * Without this the app opened straight into a stranger's portfolio and
+   * greeted you by his name, which is the least welcoming thing it did.
+   */
+  onboarded: boolean;
   /** Last good quote set, for the `cached` price source. */
   quotes: QuoteMap | null;
   quotesFetchedAt: number | null;
