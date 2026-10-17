@@ -24,8 +24,9 @@ import { AnalyticsScreen } from "./src/screens/AnalyticsScreen";
 import { IntroScreen } from "./src/screens/IntroScreen";
 import { AssetDetailScreen } from "./src/screens/AssetDetailScreen";
 import { CryptoScreen } from "./src/screens/CryptoScreen";
+import { ExchangeScreen } from "./src/screens/ExchangeScreen";
 import { OverviewScreen } from "./src/screens/OverviewScreen";
-import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { WalletScreen } from "./src/screens/WalletScreen";
 import { WatchScreen } from "./src/screens/WatchScreen";
 import { color } from "./src/theme";
 
@@ -43,8 +44,10 @@ function Router() {
       return <CryptoScreen />;
     case "watch":
       return <WatchScreen />;
-    case "settings":
-      return <SettingsScreen />;
+    case "exchange":
+      return <ExchangeScreen />;
+    case "wallet":
+      return <WalletScreen />;
     case "home":
     default:
       return <OverviewScreen />;

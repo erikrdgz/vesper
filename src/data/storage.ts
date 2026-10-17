@@ -14,7 +14,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Asset, PersistedState, QuoteMap, Transaction } from "../types";
-import { seedAssets } from "./seed";
+import { SEED_PROFILE, seedAssets } from "./seed";
 
 const KEY = "vesper.state.v1";
 const CHART_KEY = "vesper.charts.v1";
@@ -117,6 +117,23 @@ export async function loadState(): Promise<PersistedState | null> {
       // to empty rather than taking the balances down with it.
       alerts: Array.isArray(candidate.alerts) ? candidate.alerts : [],
       activity: Array.isArray(candidate.activity) ? candidate.activity : [],
+      profile:
+        candidate.profile && typeof candidate.profile.name === "string"
+          ? candidate.profile
+          : SEED_PROFILE,
+      realisedUsd:
+        typeof candidate.realisedUsd === "number" && Number.isFinite(candidate.realisedUsd)
+          ? candidate.realisedUsd
+          : 0,
+      snapshots: Array.isArray(candidate.snapshots)
+        ? candidate.snapshots.filter(
+            (snapshot) =>
+              !!snapshot &&
+              typeof snapshot.d === "string" &&
+              typeof snapshot.v === "number" &&
+              Number.isFinite(snapshot.v),
+          )
+        : [],
       quotes: fresh ? ((candidate.quotes as QuoteMap | null) ?? null) : null,
       quotesFetchedAt: fresh ? fetchedAt : null,
       reduceMotion: typeof candidate.reduceMotion === "boolean" ? candidate.reduceMotion : null,

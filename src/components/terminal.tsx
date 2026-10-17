@@ -149,7 +149,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "analytics", label: "Analytics" },
   { id: "crypto", label: "Crypto" },
   { id: "watch", label: "Watch" },
-  { id: "settings", label: "Settings" },
+  { id: "exchange", label: "Exchange" },
+  { id: "wallet", label: "Wallet" },
 ];
 
 /**
@@ -297,13 +298,13 @@ function Profile() {
 
           <Pressable
             onPress={() => {
-              setTab("settings");
+              setTab("wallet");
               setOpen(false);
             }}
             accessibilityRole="button"
             style={styles.popoverAction}
           >
-            <Txt variant="bodyStrong">Settings</Txt>
+            <Txt variant="bodyStrong">Open wallet</Txt>
           </Pressable>
 
           <Txt variant="caption" tone="textMuted">

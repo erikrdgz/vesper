@@ -9,8 +9,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { SWAP_FEE_BPS, applySwap, quoteSwap } from "../src/lib/exchange";
-import { isDeFi, type Asset, type QuoteMap } from "../src/types";
+import { SWAP_FEE_BPS, applySwap, quoteSwap, realisedOn } from "../src/lib/exchange";
+import { isDeFi, type Asset, type DeFiAsset, type QuoteMap } from "../src/types";
 
 const quotes: QuoteMap = {
   bitcoin: { usd: 100_000, change24h: 0 },
@@ -146,4 +146,38 @@ test("an untracked source keeps its basis untracked after a swap", () => {
   assert.ok(result.ok);
   const after = applySwap([noBasis, eth], "btc", "eth", 0.5, result.quote);
   assert.equal(basisOf(after, "btc"), undefined);
+});
+
+test("realised gain is proceeds after fee, less the cost of what went", () => {
+  const result = quoteSwap(book, "btc", "eth", 0.5, quotes);
+  assert.ok(result.ok);
+
+  // Half of a 60,000 basis went with the half disposed, and the
+  // proceeds were 50,000 less the fee.
+  const realised = realisedOn(btc as DeFiAsset, 0.5, result.quote);
+  assert.ok(realised !== null);
+  assert.ok(Math.abs(realised - (result.quote.netUsd - 30_000)) < 0.01);
+});
+
+test("realised gain is null when the source has no basis", () => {
+  const result = quoteSwap(book, "btc", "eth", 0.5, quotes);
+  assert.ok(result.ok);
+  const noBasis = { ...btc, costBasisUsd: undefined } as DeFiAsset;
+  assert.equal(realisedOn(noBasis, 0.5, result.quote), null);
+});
+
+test("realising the whole position takes the whole basis with it", () => {
+  const result = quoteSwap(book, "btc", "eth", 1, quotes);
+  assert.ok(result.ok);
+  const realised = realisedOn(btc as DeFiAsset, 1, result.quote);
+  assert.ok(realised !== null);
+  assert.ok(Math.abs(realised - (result.quote.netUsd - 60_000)) < 0.01);
+});
+
+test("a loss realises as a negative number rather than clamping at zero", () => {
+  const underwater = { ...btc, costBasisUsd: 200_000 } as DeFiAsset;
+  const result = quoteSwap([underwater, eth], "btc", "eth", 1, quotes);
+  assert.ok(result.ok);
+  const realised = realisedOn(underwater, 1, result.quote);
+  assert.ok(realised !== null && realised < 0, "a loss must stay a loss");
 });

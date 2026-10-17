@@ -188,6 +188,21 @@ export type TransactionCategory =
   | "subscription"
   | "shopping";
 
+/**
+ * Net worth as it stood on a given day.
+ *
+ * The one piece of history Vesper can honestly own. It cannot tell you
+ * what your bank said last Tuesday, but it can write down what the whole
+ * book was worth every day you opened it, and after a fortnight that is
+ * a real line rather than a derived one.
+ */
+export interface Snapshot {
+  /** YYYY-MM-DD, local. One per day; the last write of the day wins. */
+  d: string;
+  /** Total net worth in USD. */
+  v: number;
+}
+
 /** A point on a chart. `t` is epoch ms, `v` is USD. */
 export interface SeriesPoint {
   t: number;
@@ -198,7 +213,7 @@ export interface SeriesPoint {
 export type ChartRange = "1H" | "1D" | "1W" | "1M" | "1Y";
 
 /** Top-level navigation. The FAB is not a tab; it opens a sheet. */
-export type TabId = "home" | "analytics" | "crypto" | "watch" | "settings";
+export type TabId = "home" | "analytics" | "crypto" | "watch" | "exchange" | "wallet";
 
 /** What the FAB and the command bar can open. */
 export type SheetId = "actions" | "add-asset" | "send" | "swap" | "alert" | null;
@@ -233,6 +248,20 @@ export interface ActivityEntry {
   summary: string;
 }
 
+/**
+ * Who is using it.
+ *
+ * Seeded rather than signed in — Vesper has no accounts — but editable,
+ * because a dashboard that calls you by someone else's name every
+ * morning is worse than one that does not greet you at all.
+ */
+export interface Profile {
+  name: string;
+  handle: string;
+  /** Shown on the plan tile. Cosmetic. */
+  plan: string;
+}
+
 /** Everything Vesper persists. Versioned so a schema change can migrate. */
 export interface PersistedState {
   version: 2;
@@ -243,6 +272,11 @@ export interface PersistedState {
   watchlist: string[];
   alerts: PriceAlert[];
   activity: ActivityEntry[];
+  profile: Profile;
+  /** Gain already taken, from swaps. See `realised` in the store. */
+  realisedUsd: number;
+  /** One recorded net worth per day, oldest first. */
+  snapshots: Snapshot[];
   /** Last good quote set, for the `cached` price source. */
   quotes: QuoteMap | null;
   quotesFetchedAt: number | null;

@@ -16,7 +16,16 @@ import { useNetWorth } from "../hooks/useNetWorth";
 import { useResponsive } from "../hooks/useResponsive";
 import { useAssetSeries, usePortfolioSeries } from "../hooks/useSeries";
 import { useVesper } from "../hooks/useVesper";
-import { pct, transactionDate, usd, usdParts, usdSigned, weight } from "../lib/format";
+import {
+  firstName,
+  greeting,
+  pct,
+  transactionDate,
+  usd,
+  usdParts,
+  usdSigned,
+  weight,
+} from "../lib/format";
 import { color, space } from "../theme";
 import { isDeFi, type ChartRange, type DeFiAsset, type ValuedAsset } from "../types";
 import { Column, Row, Screen } from "../components/AppShell";
@@ -24,7 +33,7 @@ import { AnimatedNumber } from "../components/AnimatedNumber";
 import { AllocationBar, AreaChart, BarRow, Sparkline } from "../components/Chart";
 import { useChangeFlash } from "../hooks/useInteraction";
 import { ChevronRightIcon } from "../components/icons";
-import { Delta, Divider, Tap, Txt } from "../components/primitives";
+import { Avatar, Delta, Divider, Tap, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
 import { TokenObject, tokenColor } from "../components/TokenObject";
@@ -33,7 +42,8 @@ const RANGE: ChartRange = "1W";
 
 export function OverviewScreen() {
   const netWorth = useNetWorth();
-  const { transactions } = useVesper();
+  const { transactions, profile } = useVesper();
+  const { setTab } = useNavigation();
   const { isDesktop } = useResponsive();
   const series = usePortfolioSeries(RANGE);
 
@@ -48,6 +58,31 @@ export function OverviewScreen() {
 
   return (
     <Screen>
+      {/* The wallet-style greeting. On a phone this is the first thing
+          above the fold, which is what makes the screen read as yours
+          rather than as a report about you. */}
+      {!isDesktop && (
+        <Pane>
+          <View style={styles.greet}>
+            <View style={{ flex: 1 }}>
+              <Txt variant="caption" tone="textMuted">
+                {greeting()}
+              </Txt>
+              <Txt variant="h1" heading>
+                {firstName(profile.name)}
+              </Txt>
+            </View>
+            <Tap
+              onPress={() => setTab("wallet")}
+              accessibilityRole="button"
+              accessibilityLabel="Open your wallet"
+            >
+              <Avatar name={profile.name} size={44} />
+            </Tap>
+          </View>
+        </Pane>
+      )}
+
       <Row flex={1}>
         <Column flex={2.2}>
           <Pane
@@ -388,6 +423,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.xs,
+  },
+  greet: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
   },
   returnRow: {
     flexDirection: "row",

@@ -127,3 +127,20 @@ export function chartTime(epochMs: number, range: string): string {
   if (range === "1Y") return date.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
   return `${day}, ${time}`;
 }
+
+/**
+ * "Good morning" / "Good afternoon" / "Good evening".
+ *
+ * Vesper means the evening star, so the evening greeting is the one the
+ * product is named for. The other two still have to be right, because a
+ * finance app that tells you good evening at 9am reads as broken.
+ */
+export function greeting(now = new Date()): string {
+  const hour = now.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+/** "Leonard Lopez" -> "Leonard". For a greeting, not a label. */
+export const firstName = (full: string): string => full.trim().split(/\s+/)[0] ?? full;

@@ -142,3 +142,27 @@ export const SWAP_MESSAGE: Record<SwapError, string> = {
   insufficient: "That is more than you hold.",
   "not-found": "That token is no longer in your book.",
 };
+
+/**
+ * Gain taken out of the position by a swap.
+ *
+ * The disposed slice carried a share of the cost; the proceeds are what
+ * actually came back after the fee. The difference is realised — it has
+ * stopped being a number that moves with the market and become a number
+ * that happened.
+ *
+ * Returns null when the source has no basis, because a gain measured
+ * against an unknown cost is not a gain, it is a guess.
+ */
+export function realisedOn(
+  source: DeFiAsset,
+  amount: number,
+  quote: SwapQuote,
+): number | null {
+  if (source.costBasisUsd === undefined || source.costBasisUsd <= 0) return null;
+  if (source.amount <= 0) return null;
+
+  const disposedFraction = Math.min(1, amount / source.amount);
+  const disposedCost = source.costBasisUsd * disposedFraction;
+  return quote.netUsd - disposedCost;
+}

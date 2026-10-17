@@ -25,16 +25,21 @@ import { AccessibilityInfo } from "react-native";
 
 import { AUTO_REFRESH_MS, MIN_REFRESH_MS, PriceError, fetchQuotes } from "../data/prices";
 import { TOKEN_CATALOG, seedWatchlist } from "../data/catalog";
+import { SEED_PROFILE } from "../data/seed";
 import { fallbackQuotes, seedAssets, seedTransactions } from "../data/seed";
 import { clearState, loadState, saveState } from "../data/storage";
-import { applySwap, quoteSwap, type SwapError } from "../lib/exchange";
+import { applySwap, quoteSwap, realisedOn, type SwapError } from "../lib/exchange";
+import { computeNetWorth } from "../lib/netWorth";
+import { recordSnapshot } from "../lib/snapshots";
 import {
   isDeFi,
   type ActivityEntry,
   type Asset,
   type PriceAlert,
   type PriceState,
+  type Profile,
   type QuoteMap,
+  type Snapshot,
   type Transaction,
 } from "../types";
 
@@ -46,6 +51,11 @@ interface State {
   watchlist: string[];
   alerts: PriceAlert[];
   activity: ActivityEntry[];
+  profile: Profile;
+  /** Gain already taken, cumulative, from every swap so far. */
+  realisedUsd: number;
+  /** One recorded net worth per day, oldest first. */
+  snapshots: Snapshot[];
   prices: PriceState;
   /** null means "follow the OS". */
   reduceMotionOverride: boolean | null;
@@ -60,6 +70,9 @@ type Action =
       watchlist: string[];
       alerts: PriceAlert[];
       activity: ActivityEntry[];
+      profile: Profile;
+      realisedUsd: number;
+      snapshots: Snapshot[];
       quotes: QuoteMap | null;
       fetchedAt: number | null;
       reduceMotion: boolean | null;
@@ -73,6 +86,9 @@ type Action =
   | { type: "transaction/add"; transaction: Transaction }
   | { type: "watch/toggle"; coingeckoId: string }
   | { type: "assets/replace"; assets: Asset[] }
+  | { type: "realised/add"; amountUsd: number }
+  | { type: "profile/set"; patch: Partial<Profile> }
+  | { type: "snapshot/record"; snapshots: Snapshot[] }
   | { type: "alert/add"; alert: PriceAlert }
   | { type: "alert/remove"; id: string }
   | { type: "alert/trigger"; id: string; at: number }
@@ -88,6 +104,9 @@ const initialState: State = {
   watchlist: seedWatchlist,
   alerts: [],
   activity: [],
+  profile: SEED_PROFILE,
+  realisedUsd: 0,
+  snapshots: [],
   prices: {
     quotes: fallbackQuotes,
     source: "fallback",
@@ -111,6 +130,9 @@ function reducer(state: State, action: Action): State {
         watchlist: action.watchlist,
         alerts: action.alerts,
         activity: action.activity,
+        profile: action.profile,
+        realisedUsd: action.realisedUsd,
+        snapshots: action.snapshots,
         reduceMotionOverride: action.reduceMotion,
         prices: hasCache
           ? {
@@ -142,9 +164,22 @@ function reducer(state: State, action: Action): State {
       };
 
     case "prices/failed":
-      // Keep whatever numbers are already on screen. A failed refresh must
-      // never blank a balance someone is mid-way through reading.
-      return { ...state, prices: { ...state.prices, loading: false, error: action.message } };
+      // Keep whatever numbers are already on screen: a failed refresh
+      // must never blank a balance someone is mid-way through reading.
+      //
+      // But stop calling them live. They were live when they arrived and
+      // we can no longer confirm they still are, which is what "cached"
+      // means — leaving the badge green next to "rate limited" was the
+      // app contradicting itself in two adjacent lines.
+      return {
+        ...state,
+        prices: {
+          ...state.prices,
+          loading: false,
+          error: action.message,
+          source: state.prices.source === "live" ? "cached" : state.prices.source,
+        },
+      };
 
     case "asset/add":
       return { ...state, assets: [...state.assets, action.asset] };
@@ -165,6 +200,15 @@ function reducer(state: State, action: Action): State {
 
     case "assets/replace":
       return { ...state, assets: action.assets };
+
+    case "realised/add":
+      return { ...state, realisedUsd: state.realisedUsd + action.amountUsd };
+
+    case "profile/set":
+      return { ...state, profile: { ...state.profile, ...action.patch } };
+
+    case "snapshot/record":
+      return { ...state, snapshots: action.snapshots };
 
     case "alert/add":
       return { ...state, alerts: [action.alert, ...state.alerts] };
@@ -220,6 +264,7 @@ interface VesperContextValue extends State {
   addAlert: (alert: Omit<PriceAlert, "id" | "triggeredAt">) => void;
   removeAlert: (id: string) => void;
   logActivity: (kind: ActivityEntry["kind"], summary: string) => void;
+  setProfile: (patch: Partial<Profile>) => void;
   setReduceMotion: (value: boolean | null) => void;
   resetToSeed: () => Promise<void>;
 }
@@ -244,6 +289,9 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
         assets: persisted?.assets ?? seedAssets,
         alerts: persisted?.alerts ?? [],
         activity: persisted?.activity ?? [],
+        profile: persisted?.profile ?? SEED_PROFILE,
+        realisedUsd: persisted?.realisedUsd ?? 0,
+        snapshots: persisted?.snapshots ?? [],
         transactions: persisted?.transactions ?? seedTransactions,
         watchlist: persisted?.watchlist?.length ? persisted.watchlist : seedWatchlist,
         quotes: persisted?.quotes ?? null,
@@ -267,6 +315,9 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       watchlist: state.watchlist,
       alerts: state.alerts,
       activity: state.activity,
+      profile: state.profile,
+      realisedUsd: state.realisedUsd,
+      snapshots: state.snapshots,
       quotes: state.prices.source === "fallback" ? null : state.prices.quotes,
       quotesFetchedAt: state.prices.fetchedAt,
       reduceMotion: state.reduceMotionOverride,
@@ -278,6 +329,9 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
     state.watchlist,
     state.alerts,
     state.activity,
+    state.profile,
+    state.realisedUsd,
+    state.snapshots,
     state.prices.quotes,
     state.prices.source,
     state.prices.fetchedAt,
@@ -353,6 +407,28 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
       inFlightRef.current?.abort();
     };
   }, [state.hydrated, refreshPrices]);
+
+  /* --- snapshots --------------------------------------------------- */
+
+  /**
+   * Write down what the book is worth, once a day.
+   *
+   * This is the only history Vesper genuinely owns. It cannot know what
+   * a bank balance was last Tuesday, but it can record the whole total
+   * every day someone opens it, and after a fortnight that is a real
+   * line rather than one derived from crypto prices.
+   *
+   * `recordSnapshot` returns the same array when nothing moved, so this
+   * effect cannot feed itself.
+   */
+  useEffect(() => {
+    if (!state.hydrated) return;
+    if (state.prices.source === "fallback") return; // don't record a guess
+
+    const { totalUsd } = computeNetWorth(state.assets, state.prices.quotes);
+    const next = recordSnapshot(state.snapshots, totalUsd);
+    if (next !== state.snapshots) dispatch({ type: "snapshot/record", snapshots: next });
+  }, [state.hydrated, state.assets, state.prices.quotes, state.prices.source, state.snapshots]);
 
   /* --- alerts ------------------------------------------------------ */
 
@@ -439,6 +515,12 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
 
         const from = state.assets.find((asset) => asset.id === fromId);
         const to = state.assets.find((asset) => asset.id === toId);
+
+        // Book the realised gain before the position is rewritten: once
+        // the basis has moved, the figure cannot be recovered.
+        const realised = from && isDeFi(from) ? realisedOn(from, amount, priced.quote) : null;
+        if (realised !== null) dispatch({ type: "realised/add", amountUsd: realised });
+
         dispatch({
           type: "assets/replace",
           assets: applySwap(state.assets, fromId, toId, amount, priced.quote),
@@ -451,7 +533,10 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
             kind: "swap",
             summary:
               `Swapped ${amount} ${from && isDeFi(from) ? from.symbol : "?"} for ` +
-              `${priced.quote.toAmount.toFixed(4)} ${to && isDeFi(to) ? to.symbol : "?"}`,
+              `${priced.quote.toAmount.toFixed(4)} ${to && isDeFi(to) ? to.symbol : "?"}` +
+              (realised === null
+                ? ""
+                : ` · realised ${realised >= 0 ? "+" : "−"}$${Math.abs(realised).toFixed(2)}`),
           },
         });
         return { ok: true };
@@ -463,6 +548,7 @@ export function VesperProvider({ children }: { children: React.ReactNode }) {
           alert: { ...alert, id: `al-${Date.now()}`, triggeredAt: null },
         }),
       removeAlert: (id) => dispatch({ type: "alert/remove", id }),
+      setProfile: (patch) => dispatch({ type: "profile/set", patch }),
       logActivity: (kind, summary) =>
         dispatch({
           type: "activity/log",

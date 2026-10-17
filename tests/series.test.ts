@@ -12,6 +12,7 @@ import { test } from "node:test";
 
 import { areaPath, estimatePathLength, project, smoothPath } from "../src/lib/chartPath";
 import { combineSeries, extent, resample, syntheticSeries, timeGrid } from "../src/lib/series";
+import { SNAPSHOT_LIMIT, recordSnapshot } from "../src/lib/snapshots";
 import type { SeriesPoint } from "../src/types";
 
 const grid = [100, 200, 300, 400];
@@ -140,4 +141,33 @@ test("estimatePathLength is at least the straight-line distance", () => {
 test("estimatePathLength is zero for a series too short to draw", () => {
   const projection = project(1, { min: 0, max: 1 }, 10, 10);
   assert.equal(estimatePathLength([{ t: 1, v: 1 }], projection), 0);
+});
+
+test("a snapshot is written once per day and the last write wins", () => {
+  let snaps = recordSnapshot([], 100, "2026-10-17");
+  snaps = recordSnapshot(snaps, 150, "2026-10-17");
+  assert.equal(snaps.length, 1);
+  assert.equal(snaps[0]?.v, 150);
+
+  snaps = recordSnapshot(snaps, 200, "2026-10-18");
+  assert.equal(snaps.length, 2);
+});
+
+test("rewriting the same day with the same rounded value changes nothing", () => {
+  const snaps = recordSnapshot([], 100.2, "2026-10-17");
+  // Same array back, or an effect keyed on it re-saves on every tick.
+  assert.equal(recordSnapshot(snaps, 100.4, "2026-10-17"), snaps);
+});
+
+test("snapshots stay bounded", () => {
+  let snaps: ReturnType<typeof recordSnapshot> = [];
+  for (let i = 0; i < SNAPSHOT_LIMIT + 20; i += 1) {
+    snaps = recordSnapshot(snaps, i, `2026-01-${String((i % 28) + 1).padStart(2, "0")}-${i}`);
+  }
+  assert.equal(snaps.length, SNAPSHOT_LIMIT);
+});
+
+test("a non-finite value is refused rather than recorded as NaN", () => {
+  const snaps = recordSnapshot([], 100, "2026-10-17");
+  assert.equal(recordSnapshot(snaps, Number.NaN, "2026-10-18"), snaps);
 });

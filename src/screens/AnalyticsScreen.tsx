@@ -20,7 +20,8 @@ import { color, space } from "../theme";
 import { isDeFi, type ChartRange } from "../types";
 import { Column, Row, Screen } from "../components/AppShell";
 import { AnimatedNumber } from "../components/AnimatedNumber";
-import { AreaChart, BarRow } from "../components/Chart";
+import { AreaChart, BarRow, Sparkline } from "../components/Chart";
+import { snapshotSeries } from "../lib/snapshots";
 import { Delta, Divider, Segmented, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
@@ -40,11 +41,12 @@ const CATEGORY_LABEL: Record<string, string> = {
 export function AnalyticsScreen() {
   const [range, setRange] = useState<ChartRange>("1M");
   const netWorth = useNetWorth();
-  const { transactions } = useVesper();
+  const { transactions, snapshots } = useVesper();
   const series = usePortfolioSeries(range);
   const { isDesktop } = useResponsive();
   const chart = useMeasure();
   const bars = useMeasure();
+  const recorded = useMeasure();
 
   // Change across the visible window, which is not the 24h figure on
   // Overview and must not silently borrow its number.
@@ -182,6 +184,46 @@ export function AnalyticsScreen() {
               ))}
           </Pane>
 
+          <Pane title={`Recorded · ${snapshots.length} ${snapshots.length === 1 ? "day" : "days"}`}>
+            {snapshots.length < 2 ? (
+              <Txt variant="caption" tone="textSecondary">
+                Vesper writes down what the whole book is worth once a day. The chart above is
+                derived from crypto prices; this will be the real thing, and it needs a few more
+                days before it is a line.
+              </Txt>
+            ) : (
+              <>
+                <View style={styles.recordedHead}>
+                  <View>
+                    <Txt variant="micro" tone="textMuted">
+                      Since {snapshots[0]!.d}
+                    </Txt>
+                    <Txt variant="mono">
+                      {usdSigned(snapshots[snapshots.length - 1]!.v - snapshots[0]!.v)}
+                    </Txt>
+                  </View>
+                  <View onLayout={recorded.onLayout} style={styles.recordedChart}>
+                    {recorded.ready && (
+                      <Sparkline
+                        points={snapshotSeries(snapshots)}
+                        width={recorded.width}
+                        height={34}
+                        tone={
+                          snapshots[snapshots.length - 1]!.v >= snapshots[0]!.v
+                            ? color.positive
+                            : color.negative
+                        }
+                      />
+                    )}
+                  </View>
+                </View>
+                <Txt variant="caption" tone="textMuted">
+                  The only history Vesper genuinely owns: one row per day you opened it.
+                </Txt>
+              </>
+            )}
+          </Pane>
+
           <Pane flex={1} title="Movers · 24h">
             {movers.map((entry) => (
               <View key={entry.asset.id} style={styles.moverRow}>
@@ -294,5 +336,14 @@ const styles = StyleSheet.create({
   },
   moverAmount: {
     flex: 1,
+  },
+  recordedHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+  },
+  recordedChart: {
+    flex: 1,
+    minWidth: 60,
   },
 });

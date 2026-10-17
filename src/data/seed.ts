@@ -14,7 +14,7 @@
  * tell that nobody thought about it.
  */
 
-import type { Asset, QuoteMap, Transaction } from "../types";
+import type { Asset, Profile, QuoteMap, Transaction } from "../types";
 
 export const seedAssets: Asset[] = [
   {
@@ -127,3 +127,10 @@ export const seedTransactions: Transaction[] = [
   { id: "tx-9", payee: "Con Edison", amountUsd: -96.12, date: "2026-10-09T08:00:00Z", category: "subscription" },
   { id: "tx-10", payee: "Dividend · VTSAX", amountUsd: 61.44, date: "2026-10-08T13:00:00Z", category: "income" },
 ];
+
+/** Who the seeded book belongs to, until someone changes it. */
+export const SEED_PROFILE: Profile = {
+  name: "Leonard Lopez",
+  handle: "@leonardlopez",
+  plan: "Standard",
+};

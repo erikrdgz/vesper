@@ -1,9 +1,13 @@
 /**
- * Settings.
+ * Wallet.
  *
- * Mostly the disclosures. A dashboard that shows someone a six-figure net
- * worth owes them a plain account of where the data lives and what it is
- * worth, and burying that in a footer link would be the cowardly version.
+ * Who you are, what you hold, and the disclosures — in that order. On a
+ * phone this is the screen you land on from the bottom bar, so it opens
+ * with the profile and the balance rather than with a list of toggles.
+ *
+ * A dashboard that shows someone a six-figure net worth owes them a
+ * plain account of where the data lives and what it is worth, and
+ * burying that in a footer link would be the cowardly version.
  */
 
 import { useState } from "react";
@@ -12,19 +16,21 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { useNetWorth } from "../hooks/useNetWorth";
 import { useResponsive } from "../hooks/useResponsive";
 import { useVesper } from "../hooks/useVesper";
-import { relativeTime, transactionDate, usd } from "../lib/format";
+import { relativeTime, transactionDate, usd, usdSigned } from "../lib/format";
+import { downloadCsv, positionsCsv } from "../lib/exportCsv";
 import { color, radius, space } from "../theme";
 import { isDeFi } from "../types";
 import { TOKEN_CATALOG } from "../data/catalog";
 import { Column, Row, Screen } from "../components/AppShell";
 import { CoinMark } from "../components/coins";
-import { ToggleRow } from "../components/Field";
+import { Field, ToggleRow } from "../components/Field";
+import { AnimatedNumber } from "../components/AnimatedNumber";
 import { RefreshIcon, TrashIcon } from "../components/icons";
-import { Action, Divider, Txt } from "../components/primitives";
+import { Action, Avatar, Divider, Txt } from "../components/primitives";
 import { PriceSourceNote } from "../components/PriceSourceNote";
 import { Pane } from "../components/terminal";
 
-export function SettingsScreen() {
+export function WalletScreen() {
   const {
     assets,
     prices,
@@ -37,10 +43,14 @@ export function SettingsScreen() {
     watchlist,
     toggleWatch,
     activity,
+    profile,
+    setProfile,
+    realisedUsd,
   } = useVesper();
   const netWorth = useNetWorth();
   const { isDesktop } = useResponsive();
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [exported, setExported] = useState(false);
 
   const tokens = assets.filter(isDeFi).length;
 
@@ -48,13 +58,59 @@ export function SettingsScreen() {
     <Screen>
       <Row flex={1}>
         <Column flex={2.2}>
-          <Pane title="Account" minHeight={isDesktop ? undefined : 150}>
+          <Pane minHeight={isDesktop ? undefined : 280}>
+            <View style={styles.identity}>
+              <Avatar name={profile.name} size={64} />
+              <View style={{ flex: 1 }}>
+                <Txt variant="h1" heading>
+                  {profile.name}
+                </Txt>
+                <Txt variant="caption" tone="textMuted">
+                  {profile.handle} · {profile.plan}
+                </Txt>
+              </View>
+            </View>
+
+            <View style={styles.balanceBlock}>
+              <Txt variant="micro" tone="textMuted">
+                Net worth
+              </Txt>
+              <AnimatedNumber value={usd(netWorth.totalUsd)} variant="display" />
+              <View style={styles.balanceMeta}>
+                <Txt variant="mono" tone={netWorth.gainUsd >= 0 ? "positive" : "negative"}>
+                  {usdSigned(netWorth.gainUsd)} unrealised
+                </Txt>
+                <Txt variant="mono" tone={realisedUsd >= 0 ? "positive" : "negative"}>
+                  {usdSigned(realisedUsd)} realised
+                </Txt>
+              </View>
+            </View>
+
             <View style={styles.tiles}>
-              <Tile label="Plan" value="Standard" accent />
+              <Tile label="Plan" value={profile.plan} accent />
               <Tile label="Accounts" value={String(assets.length - tokens)} />
               <Tile label="Tokens" value={String(tokens)} />
-              <Tile label="Net worth" value={usd(netWorth.totalUsd)} />
+              <Tile label="Following" value={String(watchlist.length)} />
             </View>
+          </Pane>
+
+          <Pane title="Your details">
+            <Field
+              label="Name"
+              value={profile.name}
+              onChangeText={(name) => setProfile({ name })}
+              placeholder="Leonard Lopez"
+            />
+            <Field
+              label="Handle"
+              value={profile.handle}
+              onChangeText={(handle) => setProfile({ handle })}
+              placeholder="@leonardlopez"
+            />
+            <Txt variant="caption" tone="textMuted">
+              Stored in this browser. There is no account to sign in to and nothing is sent
+              anywhere — the greeting on the overview reads from here.
+            </Txt>
           </Pane>
 
           <Pane flex={1} title="What this is" minHeight={isDesktop ? undefined : 220}>
@@ -158,6 +214,23 @@ export function SettingsScreen() {
             )}
           </Pane>
 
+          <Pane title="Your data">
+            <Txt variant="caption" tone="textSecondary">
+              Every position with its cost and return, as a spreadsheet. The numbers are yours
+              and they live in your browser; this is the door out.
+            </Txt>
+            <Action
+              label={exported ? "Downloaded" : "Export positions as CSV"}
+              onPress={() => {
+                const ok = downloadCsv(
+                  `vesper-positions-${new Date().toISOString().slice(0, 10)}.csv`,
+                  positionsCsv(netWorth),
+                );
+                setExported(ok);
+              }}
+            />
+          </Pane>
+
           <Pane title="Stored data">
             <Txt variant="caption" tone="textSecondary">
               Your accounts, holdings and preferences live under one key in this browser's local
@@ -209,6 +282,20 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
 }
 
 const styles = StyleSheet.create({
+  identity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+  },
+  balanceBlock: {
+    gap: 2,
+    paddingVertical: space.sm,
+  },
+  balanceMeta: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: space.md,
+  },
   tiles: {
     flexDirection: "row",
     flexWrap: "wrap",

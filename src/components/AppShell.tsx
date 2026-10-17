@@ -25,7 +25,8 @@ import {
   CryptoIcon,
   HomeIcon,
   PlusIcon,
-  SettingsIcon,
+  SwapIcon,
+  WalletIcon,
   WatchIcon,
   type IconProps,
 } from "./icons";
@@ -49,17 +50,20 @@ const TABS: {
   { id: "analytics", label: "Analytics", short: "Charts", Icon: AnalyticsIcon },
   { id: "crypto", label: "Crypto", short: "Crypto", Icon: CryptoIcon },
   { id: "watch", label: "Watch", short: "Watch", Icon: WatchIcon },
-  { id: "settings", label: "Settings", short: "You", Icon: SettingsIcon },
+  { id: "exchange", label: "Exchange", short: "Swap", Icon: SwapIcon },
+  { id: "wallet", label: "Wallet", short: "Wallet", Icon: WalletIcon },
 ];
 
 /**
- * The bottom bar carries four of the five.
+ * The bottom bar carries four of the six.
  *
- * Five labels plus the raised button do not fit across a phone, and
- * Settings is the one you reach for least and can reach from the
- * profile anyway.
+ * Six labels plus the raised button do not fit across a phone. Analytics
+ * and Exchange come off: Analytics is a reading screen you go to
+ * deliberately and is linked from the overview, and Exchange is one of
+ * the four things the raised button already opens. What is left is the
+ * wallet shape — balances, holdings, watchlist, you.
  */
-const MOBILE_TABS = TABS.filter((tab) => tab.id !== "settings");
+const MOBILE_TABS = TABS.filter((tab) => tab.id !== "analytics" && tab.id !== "exchange");
 
 /* ------------------------------------------------------------------ */
 /* Screen scaffolding                                                  */

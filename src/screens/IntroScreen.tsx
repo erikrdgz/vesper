@@ -15,8 +15,9 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 
 import { useVesper } from "../hooks/useVesper";
+import { firstName, greeting } from "../lib/format";
 import { color, duration, ease, nativeDriver, radius, space, type } from "../theme";
-import { VesperStroke } from "../components/brand";
+import { VesperMark, VesperStroke } from "../components/brand";
 import { Txt } from "../components/primitives";
 
 const LETTERS = "VESPER".split("");
@@ -33,8 +34,22 @@ const CUE = {
 };
 
 export function IntroScreen({ onEnter }: { onEnter: () => void }) {
-  const { reduceMotion } = useVesper();
+  const { reduceMotion, profile } = useVesper();
   const [leaving, setLeaving] = useState(false);
+
+  /**
+   * Whether the two strokes have arrived and can be replaced by the
+   * single path.
+   *
+   * They share the notch-to-vertex edge exactly, and two filled paths
+   * meeting on a shared edge leave a hairline of background showing
+   * through where their anti-aliased edges fail to add up to full
+   * coverage. Drawn apart that seam is invisible; landed on top of each
+   * other it is a crack down the middle of the logo. So once they have
+   * converged the pair is swapped for `VesperMark`, which is the same
+   * outline as one path and cannot crack.
+   */
+  const [joined, setJoined] = useState(reduceMotion);
 
   // One value per beat, so the sequence reads as a list rather than a
   // chain of callbacks.
@@ -61,30 +76,57 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
         useNativeDriver: nativeDriver,
       });
 
-    const animation = Animated.parallel([
-      // The dramatic curve, used on exactly the two elements that earn
-      // it: a long hold, a decisive fall, a long settle.
-      Animated.timing(left, {
-        toValue: 1,
-        duration: duration.rise * 1.5,
-        easing: ease.dramatic,
-        useNativeDriver: nativeDriver,
-      }),
-      Animated.timing(right, {
-        toValue: 1,
-        delay: CUE.right,
-        duration: duration.rise * 1.5,
-        easing: ease.dramatic,
-        useNativeDriver: nativeDriver,
-      }),
-      ...letters.map((value, index) => beat(value, CUE.letters + index * 70, duration.medium)),
-      beat(rule, CUE.rule, duration.rise),
-      beat(tagline, CUE.tagline),
-      beat(enter, CUE.enter),
-    ]);
+    /**
+     * Two groups, not one.
+     *
+     * `Animated.parallel` defaults to `stopTogether: true`, so a single
+     * interrupted child takes the whole group down with it — which is
+     * what left the wordmark frozen half-faded with no rule, tagline or
+     * way in. Both groups also pass `stopTogether: false`, so neither
+     * can do it internally either.
+     */
+    const strokes = Animated.parallel(
+      [
+        // The dramatic curve, on the two elements that earn it: a long
+        // hold, a decisive fall, a long settle.
+        Animated.timing(left, {
+          toValue: 1,
+          duration: duration.rise * 1.5,
+          easing: ease.dramatic,
+          useNativeDriver: nativeDriver,
+        }),
+        Animated.timing(right, {
+          toValue: 1,
+          delay: CUE.right,
+          duration: duration.rise * 1.5,
+          easing: ease.dramatic,
+          useNativeDriver: nativeDriver,
+        }),
+      ],
+      { stopTogether: false },
+    );
 
-    animation.start();
-    return () => animation.stop();
+    const copy = Animated.parallel(
+      [
+        ...letters.map((value, index) => beat(value, CUE.letters + index * 70, duration.medium)),
+        beat(rule, CUE.rule, duration.rise),
+        beat(tagline, CUE.tagline),
+        beat(enter, CUE.enter),
+      ],
+      { stopTogether: false },
+    );
+
+    // The swap to the single path happens when the strokes have landed,
+    // reported by the animation rather than guessed at with a timer.
+    strokes.start(({ finished }) => {
+      if (finished) setJoined(true);
+    });
+    copy.start();
+
+    return () => {
+      strokes.stop();
+      copy.stop();
+    };
   }, [reduceMotion, left, right, letters, rule, tagline, enter]);
 
   function handleEnter() {
@@ -133,12 +175,18 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
         ]}
       >
         <View style={styles.mark}>
-          <Animated.View style={[styles.stroke, strokeStyle(left, -22)]}>
-            <VesperStroke side="left" size={MARK} />
-          </Animated.View>
-          <Animated.View style={[styles.stroke, strokeStyle(right, 22)]}>
-            <VesperStroke side="right" size={MARK} />
-          </Animated.View>
+          {joined ? (
+            <VesperMark size={MARK} />
+          ) : (
+            <>
+              <Animated.View style={[styles.stroke, strokeStyle(left, -22)]}>
+                <VesperStroke side="left" size={MARK} />
+              </Animated.View>
+              <Animated.View style={[styles.stroke, strokeStyle(right, 22)]}>
+                <VesperStroke side="right" size={MARK} />
+              </Animated.View>
+            </>
+          )}
         </View>
 
         <View style={styles.word}>
@@ -168,6 +216,9 @@ export function IntroScreen({ onEnter }: { onEnter: () => void }) {
         <Animated.View style={[styles.rule, { transform: [{ scaleX: rule }] }]} />
 
         <Animated.View style={{ opacity: tagline }}>
+          <Txt variant="h2" style={styles.welcome}>
+            {greeting()}, {firstName(profile.name)}
+          </Txt>
           <Txt variant="caption" tone="textSecondary" style={styles.tagline}>
             Bank balances and crypto in one place, honest about the difference.
           </Txt>
@@ -234,6 +285,10 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: color.hairlineStrong,
     marginVertical: space.md,
+  },
+  welcome: {
+    textAlign: "center",
+    marginBottom: space.xs,
   },
   tagline: {
     textAlign: "center",

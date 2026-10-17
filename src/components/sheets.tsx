@@ -358,11 +358,15 @@ const styles = StyleSheet.create({
  * does.
  */
 export function ActionsSheet() {
-  const { sheet, closeSheet, openSheet } = useNavigation();
+  const { sheet, closeSheet, openSheet, setTab } = useNavigation();
 
-  const options: { id: "add-asset" | "swap" | "alert" | "send"; title: string; detail: string }[] = [
+  const options: {
+    id: "add-asset" | "alert" | "send" | "exchange";
+    title: string;
+    detail: string;
+  }[] = [
     { id: "add-asset", title: "Add an asset", detail: "A bank account, a brokerage, or a token" },
-    { id: "swap", title: "Swap tokens", detail: "Convert one holding into another at live rates" },
+    { id: "exchange", title: "Swap tokens", detail: "Convert one holding into another at live rates" },
     { id: "alert", title: "Set a price alert", detail: "Get told when a token crosses a price" },
     { id: "send", title: "Record a transfer", detail: "Log money leaving a cash account" },
   ];
@@ -372,7 +376,16 @@ export function ActionsSheet() {
       {options.map((option) => (
         <Pressable
           key={option.id}
-          onPress={() => openSheet(option.id)}
+          onPress={() => {
+            // Swapping earned a screen of its own; everything else is
+            // still a sheet, so the chooser has to do both.
+            if (option.id === "exchange") {
+              closeSheet();
+              setTab("exchange");
+              return;
+            }
+            openSheet(option.id);
+          }}
           accessibilityRole="button"
           accessibilityLabel={option.title}
           style={styles.option}
